@@ -13,6 +13,7 @@ tesla-oauth-config.php
 tesla-refresh-token.json
 tesla.opcoach.com/tesla-oauth-config.php
 tesla.opcoach.com/tesla-refresh-token.json
+tesla.opcoach.com/.well-known/appspecific/com.tesla.3p.public-key.pem
 
 *.log
 .DS_Store
