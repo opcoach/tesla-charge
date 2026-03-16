@@ -9,11 +9,11 @@ env/
 .env.*
 
 raspberry/solar/cache.json
-tesla-oauth-config.php
+/tesla-oauth-config.php
 tesla-refresh-token.json
-tesla.opcoach.com/tesla-oauth-config.php
 tesla.opcoach.com/tesla-refresh-token.json
 tesla.opcoach.com/.well-known/appspecific/com.tesla.3p.public-key.pem
+!tesla.opcoach.com/tesla-oauth-config.php
 
 *.log
 .DS_Store

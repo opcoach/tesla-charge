@@ -167,7 +167,7 @@ Déployer uniquement le contenu du répertoire `tesla.opcoach.com/` sur le sous-
 Important :
 
 - ne pas publier le répertoire `raspberry/` sur le site public ;
-- placer le vrai fichier `tesla-oauth-config.php` de préférence au-dessus de la racine web ;
+- le dépôt contient déjà `tesla.opcoach.com/tesla-oauth-config.php` avec des placeholders à remplacer ;
 - publier la clé publique ici :
   `https://tesla.opcoach.com/.well-known/appspecific/com.tesla.3p.public-key.pem`
 
@@ -179,9 +179,12 @@ Dans l’interface Tesla :
 - `URI de redirection autorisée` : `https://tesla.opcoach.com/auth/callback`
 - `URL de renvoi autorisée` : `https://tesla.opcoach.com/logout/callback`
 
-### Configuration privée
+### Configuration Tesla
 
-Créer un fichier privé `tesla-oauth-config.php` à partir de `tesla.opcoach.com/tesla-oauth-config.php.example`.
+Le dépôt contient déjà `tesla.opcoach.com/tesla-oauth-config.php`. Il faut simplement remplacer :
+
+- `REMPLACER_PAR_LE_CLIENT_ID_TESLA`
+- `REMPLACER_PAR_LE_CLIENT_SECRET_TESLA`
 
 Pour un compte Tesla utilisé en France, l’audience Fleet API à garder dans l’exemple est :
 
@@ -189,12 +192,15 @@ Pour un compte Tesla utilisé en France, l’audience Fleet API à garder dans l
 https://fleet-api.prd.eu.vn.cloud.tesla.com
 ```
 
+Le `refresh_token` est sauvegardé par défaut hors de la racine web, dans le parent du dossier `tesla.opcoach.com`.
+
 Exemple d’emplacement :
 
 ```text
-/home/compte/
-├── tesla-oauth-config.php
+/home/compte/tesla-charge/
+├── tesla-refresh-token.json
 └── tesla.opcoach.com/
+    └── tesla-oauth-config.php
 ```
 
 ### Démarrage du flux OAuth

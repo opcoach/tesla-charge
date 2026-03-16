@@ -20,27 +20,29 @@ tesla.opcoach.com/
 │   └── callback/
 │       └── index.php
 ├── index.php
+├── tesla-oauth-config.php
 └── tesla-oauth-config.php.example
 ```
 
-## Fichier de configuration privé
+## Fichier de configuration
 
-Le fichier réel `tesla-oauth-config.php` doit être placé de préférence au-dessus de la racine web, par exemple dans le répertoire parent du sous-domaine.
+Le dépôt contient déjà `tesla-oauth-config.php` avec des placeholders. Il faut remplacer :
 
-Exemple :
+- `REMPLACER_PAR_LE_CLIENT_ID_TESLA`
+- `REMPLACER_PAR_LE_CLIENT_SECRET_TESLA`
 
-```text
-/home/compte/
-├── tesla-oauth-config.php
-└── tesla.opcoach.com/
-```
-
-Le contenu du fichier peut être construit à partir de `tesla-oauth-config.php.example`.
+Le modèle `tesla-oauth-config.php.example` reste disponible comme référence.
 
 Pour un compte Tesla utilisé en France, l’audience par défaut à configurer est :
 
 ```text
 https://fleet-api.prd.eu.vn.cloud.tesla.com
+```
+
+Le `refresh_token` est sauvegardé par défaut dans le parent du dossier web :
+
+```text
+/home/compte/tesla-charge/tesla-refresh-token.json
 ```
 
 ## URLs Tesla à déclarer
