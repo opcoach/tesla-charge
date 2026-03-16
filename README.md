@@ -78,7 +78,12 @@ La boucle de contrôle tourne toutes les `5` secondes par défaut.
 cd "$HOME/git"
 git clone <URL_DU_DEPOT> tesla-charge
 cd "$HOME/git/tesla-charge/raspberry"
-python3 -m pip install -r requirements.txt
+sudo apt update
+sudo apt install -y python3-venv
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 mkdir -p solar
 ```
 
@@ -92,9 +97,10 @@ scp /chemin/local/vers/cache.json pi@raspberrypi:git/tesla-charge/raspberry/sola
 
 ```bash
 cd "$HOME/git/tesla-charge/raspberry"
+. .venv/bin/activate
 export ENPHASE_TOKEN='...'
 export TESLA_EMAIL='...'
-python3 app.py
+python app.py
 ```
 
 L’interface locale sera disponible sur :
@@ -134,7 +140,7 @@ User=pi
 WorkingDirectory=/home/pi/git/tesla-charge/raspberry
 Environment=ENPHASE_TOKEN=remplacer_par_le_token
 Environment=TESLA_EMAIL=remplacer_par_l_email
-ExecStart=/usr/bin/python3 /home/pi/git/tesla-charge/raspberry/app.py
+ExecStart=/home/pi/git/tesla-charge/raspberry/.venv/bin/python /home/pi/git/tesla-charge/raspberry/app.py
 Restart=always
 RestartSec=10
 
