@@ -17,6 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 CONNECTED_STATES = {"Charging", "Stopped", "Complete", "Starting", "NoPower"}
 DISCONNECTED_CABLES = {None, "", "<invalid>", "NoCable"}
+ERROR_LOG_THROTTLE_SECONDS = 30
 
 
 @dataclass(slots=True)
@@ -33,6 +34,14 @@ class TeslaSnapshot:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+class TeslaCommandError(RuntimeError):
+    pass
+
+
+class TeslaProxyUnavailableError(TeslaCommandError):
+    pass
 
 
 @dataclass(slots=True)
@@ -56,6 +65,8 @@ class TeslaController:
         self._last_snapshot: TeslaSnapshot | None = None
         self._last_error: str | None = None
         self._last_commanded_amps: int | None = None
+        self._last_logged_error: str | None = None
+        self._last_logged_error_at: datetime | None = None
 
     def read_status(self) -> TeslaSnapshot:
         try:
@@ -157,7 +168,9 @@ class TeslaController:
         message = str(exc)
         with self._lock:
             self._last_error = message
-        LOGGER.error("Tesla controller error: %s", message)
+            should_log = self._should_log_error(message)
+        if should_log:
+            LOGGER.error("Tesla controller error: %s", message)
 
     def _ensure_vehicle(self) -> dict[str, Any]:
         if self._vehicle is not None:
@@ -262,18 +275,7 @@ class TeslaController:
     def _post_proxy_command(self, vin: str, amps: int) -> dict[str, Any]:
         access_token = self._ensure_access_token()
         url = f"{self.config.tesla_proxy_url}/api/1/vehicles/{vin}/command/set_charging_amps"
-        response = requests.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-            json={"charging_amps": amps},
-            timeout=self.config.requests_timeout_seconds,
-        )
-
-        if response.status_code == 401:
-            access_token = self._refresh_access_token(force=True)
+        try:
             response = requests.post(
                 url,
                 headers={
@@ -283,6 +285,27 @@ class TeslaController:
                 json={"charging_amps": amps},
                 timeout=self.config.requests_timeout_seconds,
             )
+        except requests.ConnectionError as exc:
+            raise TeslaProxyUnavailableError(
+                f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
+            ) from exc
+
+        if response.status_code == 401:
+            access_token = self._refresh_access_token(force=True)
+            try:
+                response = requests.post(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"charging_amps": amps},
+                    timeout=self.config.requests_timeout_seconds,
+                )
+            except requests.ConnectionError as exc:
+                raise TeslaProxyUnavailableError(
+                    f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
+                ) from exc
 
         response.raise_for_status()
         payload = response.json()
@@ -471,3 +494,20 @@ class TeslaController:
         if not isinstance(value, str) or not value.strip():
             return None
         return value.strip()
+
+    def _should_log_error(self, message: str) -> bool:
+        now = datetime.now(timezone.utc)
+        if self._last_logged_error != message:
+            self._last_logged_error = message
+            self._last_logged_error_at = now
+            return True
+
+        if self._last_logged_error_at is None:
+            self._last_logged_error_at = now
+            return True
+
+        if now - self._last_logged_error_at >= timedelta(seconds=ERROR_LOG_THROTTLE_SECONDS):
+            self._last_logged_error_at = now
+            return True
+
+        return False

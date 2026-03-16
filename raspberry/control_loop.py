@@ -8,7 +8,7 @@ from typing import Any
 
 from config import AppConfig
 from solar_monitor import SolarMonitor, SolarSnapshot
-from tesla_controller import TeslaController, TeslaSnapshot
+from tesla_controller import TeslaController, TeslaProxyUnavailableError, TeslaSnapshot
 
 
 LOGGER = logging.getLogger(__name__)
@@ -141,10 +141,16 @@ class ControlLoop:
                 "reason": "unchanged",
             }
 
-        result = self.tesla_controller.set_charging_amps(
-            desired_amps,
-            source="control_loop",
-        )
+        try:
+            result = self.tesla_controller.set_charging_amps(
+                desired_amps,
+                source="control_loop",
+            )
+        except TeslaProxyUnavailableError:
+            return {
+                "applied_amps": tesla_snapshot.charging_amps,
+                "reason": "proxy_unavailable",
+            }
         return {
             "applied_amps": result.get("requested_amps"),
             "reason": result.get("reason", "updated"),
