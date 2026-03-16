@@ -7,8 +7,7 @@ Wants=network-online.target
 Type=simple
 User=olivier
 WorkingDirectory=/home/olivier/git/tesla-charge
-# Remplacer ExecStart par la vraie commande qui lance le proxy local sur 127.0.0.1:4443.
-ExecStart=/CHEMIN/DU/PROXY --listen 127.0.0.1:4443
+ExecStart=/usr/local/bin/tesla-http-proxy -host 127.0.0.1 -port 4443 -cert /home/olivier/git/tesla-charge/raspberry/proxy/tls-cert.pem -tls-key /home/olivier/git/tesla-charge/raspberry/proxy/tls-key.pem -key-file /home/olivier/git/tesla-charge/raspberry/proxy/fleet-key.pem
 Restart=always
 RestartSec=10
 NoNewPrivileges=true

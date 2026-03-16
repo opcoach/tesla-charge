@@ -22,6 +22,8 @@ tesla-charge/
 │   ├── api_server.py
 │   ├── config.py
 │   ├── control_loop.py
+│   ├── proxy/
+│   │   └── README.md
 │   ├── requirements.txt
 │   ├── solar_monitor.py
 │   └── tesla_controller.py
@@ -70,7 +72,9 @@ Si le proxy local de commandes n’est pas disponible, un nouvel essai n’est t
 - `TESLA_REFRESH_TOKEN_FILE` : défaut `../tesla-refresh-token.json`
 - `TESLA_API_BASE_URL` : défaut `https://fleet-api.prd.eu.vn.cloud.tesla.com`
 - `TESLA_AUTH_URL` : défaut `https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token`
-- `TESLA_PROXY_URL` : défaut `http://localhost:4443`
+- `TESLA_PROXY_URL` : défaut `https://localhost:4443`
+- `TESLA_PROXY_VERIFY_SSL` : défaut `false`
+- `TESLA_PROXY_CA_FILE` : optionnel, chemin vers un certificat local si tu veux vérifier TLS
 - `TESLA_VEHICLE_NAME` : optionnel
 - `TESLA_VEHICLE_INDEX` : défaut `0`
 - `CONTROL_INTERVAL_SEC` : défaut `5`
@@ -120,7 +124,7 @@ L’interface locale sera disponible sur :
 http://<ip-de-la-raspberry>:8080/
 ```
 
-Tant que rien n’écoute sur `TESLA_PROXY_URL` (par défaut `http://localhost:4443`), l’application reste utile pour la supervision solaire et Tesla, mais passe de fait en lecture seule pour les commandes de charge.
+Tant que rien n’écoute sur `TESLA_PROXY_URL` (par défaut `https://localhost:4443`), l’application reste utile pour la supervision solaire et Tesla, mais passe de fait en lecture seule pour les commandes de charge.
 
 ### API REST
 
@@ -155,6 +159,8 @@ Les unités `systemd` sont à installer dans :
 Les fichiers versionnés supposent un utilisateur Raspberry nommé `olivier`. Si besoin, adapte `User=` et les chemins `/home/olivier/...`.
 
 L’application Python ne doit pas démarrer elle-même le proxy local. Le proxy de commandes Tesla doit rester un service séparé, plus simple à superviser et redémarrer.
+
+Le proxy local Tesla officiel est `tesla-http-proxy`. Il écoute en HTTPS, pas en HTTP.
 
 ## 2. Sous-domaine `tesla.opcoach.com`
 

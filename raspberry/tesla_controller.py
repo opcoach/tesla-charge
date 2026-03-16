@@ -296,6 +296,7 @@ class TeslaController:
                 },
                 json={"charging_amps": amps},
                 timeout=self.config.requests_timeout_seconds,
+                verify=self._proxy_verify_arg(),
             )
         except requests.ConnectionError as exc:
             self._proxy_unavailable_until = datetime.now(timezone.utc) + timedelta(
@@ -316,6 +317,7 @@ class TeslaController:
                     },
                     json={"charging_amps": amps},
                     timeout=self.config.requests_timeout_seconds,
+                    verify=self._proxy_verify_arg(),
                 )
             except requests.ConnectionError as exc:
                 self._proxy_unavailable_until = datetime.now(timezone.utc) + timedelta(
@@ -346,6 +348,11 @@ class TeslaController:
             self._proxy_unavailable_until = None
             return False
         return True
+
+    def _proxy_verify_arg(self) -> bool | str:
+        if self.config.tesla_proxy_ca_file:
+            return self.config.tesla_proxy_ca_file
+        return self.config.tesla_proxy_verify_ssl
 
     def _api_request(self, method: str, path: str) -> Any:
         access_token = self._ensure_access_token()

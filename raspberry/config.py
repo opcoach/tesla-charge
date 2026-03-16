@@ -31,6 +31,8 @@ class AppConfig:
     tesla_api_base_url: str
     tesla_auth_url: str
     tesla_proxy_url: str
+    tesla_proxy_verify_ssl: bool
+    tesla_proxy_ca_file: str | None
     tesla_vehicle_name: str | None
     tesla_vehicle_index: int
     poll_interval_seconds: int
@@ -50,6 +52,13 @@ class AppConfig:
         token_path = Path(token_file)
         if not token_path.is_absolute():
             token_path = (base_dir / token_path).resolve()
+
+        proxy_ca_file = os.getenv("TESLA_PROXY_CA_FILE", "").strip() or None
+        proxy_ca_path = None
+        if proxy_ca_file:
+            proxy_ca_path = Path(proxy_ca_file)
+            if not proxy_ca_path.is_absolute():
+                proxy_ca_path = (base_dir / proxy_ca_path).resolve()
 
         envoy_token = os.getenv("ENPHASE_TOKEN", "").strip()
         tesla_client_id = os.getenv("TESLA_CLIENT_ID", "").strip() or None
@@ -96,7 +105,9 @@ class AppConfig:
                 "TESLA_AUTH_URL",
                 "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
             ).rstrip("/"),
-            tesla_proxy_url=os.getenv("TESLA_PROXY_URL", "http://localhost:4443").rstrip("/"),
+            tesla_proxy_url=os.getenv("TESLA_PROXY_URL", "https://localhost:4443").rstrip("/"),
+            tesla_proxy_verify_ssl=_get_bool("TESLA_PROXY_VERIFY_SSL", False),
+            tesla_proxy_ca_file=str(proxy_ca_path) if proxy_ca_path else None,
             tesla_vehicle_name=os.getenv("TESLA_VEHICLE_NAME") or None,
             tesla_vehicle_index=max(0, _get_int("TESLA_VEHICLE_INDEX", 0)),
             poll_interval_seconds=poll_interval_seconds,
