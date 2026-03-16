@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+
+def _get_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return int(value)
+
+
+@dataclass(frozen=True, slots=True)
+class AppConfig:
+    envoy_url: str
+    envoy_token: str
+    envoy_verify_ssl: bool
+    tesla_email: str
+    tesla_cache_file: str
+    tesla_proxy_url: str
+    tesla_vehicle_name: str | None
+    tesla_vehicle_index: int
+    poll_interval_seconds: int
+    api_host: str
+    api_port: int
+    min_amps: int
+    max_amps: int
+    requests_timeout_seconds: int
+    log_level: str
+
+    @classmethod
+    def from_env(cls) -> "AppConfig":
+        base_dir = Path(__file__).resolve().parent
+        cache_file = os.getenv("TESLA_CACHE_FILE", "solar/cache.json")
+        cache_path = Path(cache_file)
+        if not cache_path.is_absolute():
+            cache_path = (base_dir / cache_path).resolve()
+
+        envoy_token = os.getenv("ENPHASE_TOKEN", "").strip()
+        tesla_email = os.getenv("TESLA_EMAIL", "").strip()
+
+        missing = []
+        if not envoy_token:
+            missing.append("ENPHASE_TOKEN")
+        if not tesla_email:
+            missing.append("TESLA_EMAIL")
+        if missing:
+            names = ", ".join(missing)
+            raise ValueError(f"Variables d'environnement manquantes: {names}")
+
+        poll_interval_seconds = max(1, _get_int("CONTROL_INTERVAL_SEC", 5))
+        min_amps = _get_int("TESLA_MIN_AMPS", 6)
+        max_amps = _get_int("TESLA_MAX_AMPS", 32)
+        if min_amps < 6:
+            min_amps = 6
+        if max_amps < min_amps:
+            max_amps = min_amps
+
+        return cls(
+            envoy_url=os.getenv(
+                "ENVOY_URL",
+                "https://192.168.68.57/ivp/meters/readings",
+            ).rstrip("/"),
+            envoy_token=envoy_token,
+            envoy_verify_ssl=_get_bool("ENVOY_VERIFY_SSL", False),
+            tesla_email=tesla_email,
+            tesla_cache_file=str(cache_path),
+            tesla_proxy_url=os.getenv("TESLA_PROXY_URL", "http://localhost:4443").rstrip("/"),
+            tesla_vehicle_name=os.getenv("TESLA_VEHICLE_NAME") or None,
+            tesla_vehicle_index=max(0, _get_int("TESLA_VEHICLE_INDEX", 0)),
+            poll_interval_seconds=poll_interval_seconds,
+            api_host=os.getenv("APP_HOST", "0.0.0.0"),
+            api_port=_get_int("APP_PORT", 8080),
+            min_amps=min_amps,
+            max_amps=max_amps,
+            requests_timeout_seconds=max(3, _get_int("REQUEST_TIMEOUT_SEC", 10)),
+            log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        )
