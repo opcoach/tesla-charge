@@ -3,8 +3,8 @@
 return [
     'client_id' => 'REMPLACER_PAR_LE_CLIENT_ID_TESLA',
     'client_secret' => 'REMPLACER_PAR_LE_CLIENT_SECRET_TESLA',
-    'redirect_uri' => 'https://tesla.opcoach.com/auth/callback',
-    'logout_redirect_uri' => 'https://tesla.opcoach.com/logout/callback',
+    'redirect_uri' => 'https://tesla.opcoach.com/auth/callback/',
+    'logout_redirect_uri' => 'https://tesla.opcoach.com/logout/callback/',
     'audience' => 'https://fleet-api.prd.eu.vn.cloud.tesla.com',
     'scope' => 'openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds',
     'token_file' => dirname(__DIR__) . '/tesla-refresh-token.json',

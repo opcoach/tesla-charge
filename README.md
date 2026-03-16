@@ -176,8 +176,8 @@ Important :
 Dans l’interface Tesla :
 
 - `URL d'origine autorisée` : `https://tesla.opcoach.com`
-- `URI de redirection autorisée` : `https://tesla.opcoach.com/auth/callback`
-- `URL de renvoi autorisée` : `https://tesla.opcoach.com/logout/callback`
+- `URI de redirection autorisée` : `https://tesla.opcoach.com/auth/callback/`
+- `URL de renvoi autorisée` : `https://tesla.opcoach.com/logout/callback/`
 
 ### Configuration Tesla
 

@@ -17,8 +17,8 @@ $body = '<h1>tesla.opcoach.com</h1>';
 $body .= '<p>Point d’entrée minimal pour l’autorisation Tesla Fleet API et le key pairing.</p>';
 $body .= '<ul>';
 $body .= '<li>Clé publique attendue : <code>' . htmlspecialchars($publicKeyUrl, ENT_QUOTES, 'UTF-8') . '</code></li>';
-$body .= '<li>Callback OAuth : <code>https://' . htmlspecialchars($_SERVER['HTTP_HOST'], ENT_QUOTES, 'UTF-8') . '/auth/callback</code></li>';
-$body .= '<li>Logout callback : <code>https://' . htmlspecialchars($_SERVER['HTTP_HOST'], ENT_QUOTES, 'UTF-8') . '/logout/callback</code></li>';
+$body .= '<li>Callback OAuth : <code>https://' . htmlspecialchars($_SERVER['HTTP_HOST'], ENT_QUOTES, 'UTF-8') . '/auth/callback/</code></li>';
+$body .= '<li>Logout callback : <code>https://' . htmlspecialchars($_SERVER['HTTP_HOST'], ENT_QUOTES, 'UTF-8') . '/logout/callback/</code></li>';
 $body .= '</ul>';
 
 if ($configError !== null) {

@@ -48,8 +48,8 @@ Le `refresh_token` est sauvegardé par défaut dans le parent du dossier web :
 ## URLs Tesla à déclarer
 
 - `URL d'origine autorisée` : `https://tesla.opcoach.com`
-- `URI de redirection autorisée` : `https://tesla.opcoach.com/auth/callback`
-- `URL de renvoi autorisée` : `https://tesla.opcoach.com/logout/callback`
+- `URI de redirection autorisée` : `https://tesla.opcoach.com/auth/callback/`
+- `URL de renvoi autorisée` : `https://tesla.opcoach.com/logout/callback/`
 
 ## Clé publique
 
