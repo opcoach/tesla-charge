@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+import json
 from pathlib import Path
+from typing import Any
 
 
 def _get_bool(name: str, default: bool) -> bool:
@@ -24,8 +26,10 @@ class AppConfig:
     envoy_url: str
     envoy_token: str
     envoy_verify_ssl: bool
-    tesla_email: str
-    tesla_cache_file: str
+    tesla_client_id: str | None
+    tesla_refresh_token_file: str
+    tesla_api_base_url: str
+    tesla_auth_url: str
     tesla_proxy_url: str
     tesla_vehicle_name: str | None
     tesla_vehicle_index: int
@@ -40,19 +44,19 @@ class AppConfig:
     @classmethod
     def from_env(cls) -> "AppConfig":
         base_dir = Path(__file__).resolve().parent
-        cache_file = os.getenv("TESLA_CACHE_FILE", "solar/cache.json")
-        cache_path = Path(cache_file)
-        if not cache_path.is_absolute():
-            cache_path = (base_dir / cache_path).resolve()
+        token_file = os.getenv("TESLA_REFRESH_TOKEN_FILE", "../tesla-refresh-token.json")
+        token_path = Path(token_file)
+        if not token_path.is_absolute():
+            token_path = (base_dir / token_path).resolve()
 
         envoy_token = os.getenv("ENPHASE_TOKEN", "").strip()
-        tesla_email = os.getenv("TESLA_EMAIL", "").strip()
+        tesla_client_id = os.getenv("TESLA_CLIENT_ID", "").strip() or None
+        if tesla_client_id is None:
+            tesla_client_id = cls._read_client_id_from_token_file(token_path)
 
         missing = []
         if not envoy_token:
             missing.append("ENPHASE_TOKEN")
-        if not tesla_email:
-            missing.append("TESLA_EMAIL")
         if missing:
             names = ", ".join(missing)
             raise ValueError(f"Variables d'environnement manquantes: {names}")
@@ -72,8 +76,16 @@ class AppConfig:
             ).rstrip("/"),
             envoy_token=envoy_token,
             envoy_verify_ssl=_get_bool("ENVOY_VERIFY_SSL", False),
-            tesla_email=tesla_email,
-            tesla_cache_file=str(cache_path),
+            tesla_client_id=tesla_client_id,
+            tesla_refresh_token_file=str(token_path),
+            tesla_api_base_url=os.getenv(
+                "TESLA_API_BASE_URL",
+                "https://fleet-api.prd.eu.vn.cloud.tesla.com",
+            ).rstrip("/"),
+            tesla_auth_url=os.getenv(
+                "TESLA_AUTH_URL",
+                "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token",
+            ).rstrip("/"),
             tesla_proxy_url=os.getenv("TESLA_PROXY_URL", "http://localhost:4443").rstrip("/"),
             tesla_vehicle_name=os.getenv("TESLA_VEHICLE_NAME") or None,
             tesla_vehicle_index=max(0, _get_int("TESLA_VEHICLE_INDEX", 0)),
@@ -85,3 +97,22 @@ class AppConfig:
             requests_timeout_seconds=max(3, _get_int("REQUEST_TIMEOUT_SEC", 10)),
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         )
+
+    @staticmethod
+    def _read_client_id_from_token_file(path: Path) -> str | None:
+        if not path.is_file():
+            return None
+
+        try:
+            with path.open(encoding="utf-8") as infile:
+                payload: Any = json.load(infile)
+        except (OSError, ValueError):
+            return None
+
+        if not isinstance(payload, dict):
+            return None
+
+        client_id = payload.get("client_id")
+        if isinstance(client_id, str) and client_id.strip():
+            return client_id.strip()
+        return None

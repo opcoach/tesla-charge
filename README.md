@@ -4,19 +4,19 @@ Dépôt unique pour deux composants complémentaires :
 
 - `raspberry/` : service Python léger qui tourne en continu sur une Raspberry Pi et ajuste la charge Tesla selon le surplus solaire ;
 - `tesla.opcoach.com/` : mini site PHP pour Tesla Fleet API, utilisé pour l’autorisation OAuth, le callback et le key pairing.
+- `tesla-refresh-token.json` : fichier local généré après l’autorisation OAuth, à copier sur la Raspberry hors du webroot.
 
 ## Arborescence
 
 ```text
 tesla-charge/
+├── tesla-refresh-token.json
 ├── raspberry/
 │   ├── app.py
 │   ├── api_server.py
 │   ├── config.py
 │   ├── control_loop.py
 │   ├── requirements.txt
-│   ├── solar/
-│   │   └── cache.json
 │   ├── solar_monitor.py
 │   └── tesla_controller.py
 └── tesla.opcoach.com/
@@ -37,7 +37,6 @@ Le composant `raspberry/` est une application Python 3.11 prévue pour Raspberry
 ### Dépendances Python
 
 - `requests`
-- `teslapy`
 - `flask`
 
 ### Fonctionnement
@@ -47,6 +46,7 @@ Le service :
 - lit les données de production et de réseau via l’Envoy Enphase ;
 - calcule le surplus exporté ;
 - convertit ce surplus en intensité de charge Tesla ;
+- lit l’état du véhicule via Tesla Fleet API à partir d’un `refresh_token` ;
 - borne la consigne entre `6 A` et `32 A` ;
 - n’envoie pas de commande si l’ampérage ne change pas ;
 - expose une API REST ;
@@ -57,10 +57,12 @@ La boucle de contrôle tourne toutes les `5` secondes par défaut.
 ### Variables d’environnement
 
 - `ENPHASE_TOKEN` : obligatoire
-- `TESLA_EMAIL` : obligatoire
+- `TESLA_CLIENT_ID` : recommandé, sinon lu depuis `tesla-refresh-token.json` s’il contient déjà `client_id`
 - `ENVOY_URL` : défaut `https://192.168.68.57/ivp/meters/readings`
+- `TESLA_REFRESH_TOKEN_FILE` : défaut `../tesla-refresh-token.json`
+- `TESLA_API_BASE_URL` : défaut `https://fleet-api.prd.eu.vn.cloud.tesla.com`
+- `TESLA_AUTH_URL` : défaut `https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token`
 - `TESLA_PROXY_URL` : défaut `http://localhost:4443`
-- `TESLA_CACHE_FILE` : défaut `solar/cache.json`
 - `TESLA_VEHICLE_NAME` : optionnel
 - `TESLA_VEHICLE_INDEX` : défaut `0`
 - `CONTROL_INTERVAL_SEC` : défaut `5`
@@ -84,13 +86,12 @@ python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-mkdir -p solar
 ```
 
-Copier ensuite le cache Tesla existant :
+Copier ensuite le fichier `tesla-refresh-token.json` généré par le callback web vers la racine du dépôt sur la Raspberry :
 
 ```bash
-scp /chemin/local/vers/cache.json pi@raspberrypi:git/tesla-charge/raspberry/solar/cache.json
+scp /chemin/local/vers/tesla-refresh-token.json pi@raspberrypi:git/tesla-charge/tesla-refresh-token.json
 ```
 
 ### Lancement manuel
@@ -99,7 +100,7 @@ scp /chemin/local/vers/cache.json pi@raspberrypi:git/tesla-charge/raspberry/sola
 cd "$HOME/git/tesla-charge/raspberry"
 . .venv/bin/activate
 export ENPHASE_TOKEN='...'
-export TESLA_EMAIL='...'
+export TESLA_CLIENT_ID='...'
 python app.py
 ```
 
@@ -139,7 +140,7 @@ Type=simple
 User=pi
 WorkingDirectory=/home/pi/git/tesla-charge/raspberry
 Environment=ENPHASE_TOKEN=remplacer_par_le_token
-Environment=TESLA_EMAIL=remplacer_par_l_email
+Environment=TESLA_CLIENT_ID=remplacer_par_le_client_id
 ExecStart=/home/pi/git/tesla-charge/raspberry/.venv/bin/python /home/pi/git/tesla-charge/raspberry/app.py
 Restart=always
 RestartSec=10
@@ -231,7 +232,7 @@ python3 -m py_compile app.py api_server.py config.py control_loop.py solar_monit
 
 Le dépôt ignore notamment :
 
-- `raspberry/solar/cache.json`
+- `tesla-refresh-token.json`
 - les artefacts Python
 - les environnements virtuels
 - les fichiers `.env`

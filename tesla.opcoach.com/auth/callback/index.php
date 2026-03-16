@@ -71,6 +71,7 @@ try {
 
     $dataToStore = [
         'saved_at' => gmdate('c'),
+        'client_id' => $config['client_id'],
         'access_token' => $payload['access_token'] ?? null,
         'refresh_token' => $payload['refresh_token'],
         'expires_in' => $payload['expires_in'] ?? null,
