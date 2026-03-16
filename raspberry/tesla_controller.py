@@ -63,14 +63,19 @@ class TeslaController:
         self._vehicle: dict[str, Any] | None = None
         self._token_state: TokenState | None = None
         self._last_snapshot: TeslaSnapshot | None = None
+        self._last_snapshot_at: datetime | None = None
         self._last_error: str | None = None
         self._last_commanded_amps: int | None = None
         self._last_logged_error: str | None = None
         self._last_logged_error_at: datetime | None = None
+        self._proxy_unavailable_until: datetime | None = None
 
     def read_status(self) -> TeslaSnapshot:
         try:
             with self._lock:
+                if self._has_recent_snapshot():
+                    return self._last_snapshot  # type: ignore[return-value]
+
                 vehicle = self._ensure_vehicle()
                 summary = self._get_vehicle_summary(vehicle["vin"])
                 vehicle_data = None
@@ -81,6 +86,7 @@ class TeslaController:
                 snapshot = self._snapshot_from_vehicle(merged)
                 self._vehicle = merged
                 self._last_snapshot = snapshot
+                self._last_snapshot_at = datetime.now(timezone.utc)
                 self._last_error = None
 
             LOGGER.debug("Tesla snapshot: %s", snapshot)
@@ -128,6 +134,7 @@ class TeslaController:
                 snapshot_after = self._snapshot_from_vehicle(merged)
                 self._vehicle = merged
                 self._last_snapshot = snapshot_after
+                self._last_snapshot_at = datetime.now(timezone.utc)
                 self._last_error = None
 
             changed = reason != "already_set" and current_amps != clamped_amps
@@ -273,6 +280,11 @@ class TeslaController:
         )
 
     def _post_proxy_command(self, vin: str, amps: int) -> dict[str, Any]:
+        if self._is_proxy_in_cooldown():
+            raise TeslaProxyUnavailableError(
+                f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
+            )
+
         access_token = self._ensure_access_token()
         url = f"{self.config.tesla_proxy_url}/api/1/vehicles/{vin}/command/set_charging_amps"
         try:
@@ -286,6 +298,9 @@ class TeslaController:
                 timeout=self.config.requests_timeout_seconds,
             )
         except requests.ConnectionError as exc:
+            self._proxy_unavailable_until = datetime.now(timezone.utc) + timedelta(
+                seconds=self.config.tesla_proxy_retry_seconds
+            )
             raise TeslaProxyUnavailableError(
                 f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
             ) from exc
@@ -303,15 +318,34 @@ class TeslaController:
                     timeout=self.config.requests_timeout_seconds,
                 )
             except requests.ConnectionError as exc:
+                self._proxy_unavailable_until = datetime.now(timezone.utc) + timedelta(
+                    seconds=self.config.tesla_proxy_retry_seconds
+                )
                 raise TeslaProxyUnavailableError(
                     f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
                 ) from exc
 
         response.raise_for_status()
+        self._proxy_unavailable_until = None
         payload = response.json()
         if not isinstance(payload, dict):
             raise RuntimeError("Réponse Tesla proxy invalide")
         return payload
+
+    def _has_recent_snapshot(self) -> bool:
+        if self._last_snapshot is None or self._last_snapshot_at is None:
+            return False
+        return (
+            datetime.now(timezone.utc) - self._last_snapshot_at
+        ) < timedelta(seconds=self.config.tesla_status_interval_seconds)
+
+    def _is_proxy_in_cooldown(self) -> bool:
+        if self._proxy_unavailable_until is None:
+            return False
+        if datetime.now(timezone.utc) >= self._proxy_unavailable_until:
+            self._proxy_unavailable_until = None
+            return False
+        return True
 
     def _api_request(self, method: str, path: str) -> Any:
         access_token = self._ensure_access_token()

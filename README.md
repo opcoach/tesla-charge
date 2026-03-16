@@ -11,6 +11,12 @@ Dépôt unique pour deux composants complémentaires :
 ```text
 tesla-charge/
 ├── tesla-refresh-token.json
+├── deploy/
+│   └── systemd/
+│       ├── README.md
+│       ├── tesla-charge.env.example
+│       ├── tesla-charge.service
+│       └── tesla-command-proxy.service.example
 ├── raspberry/
 │   ├── app.py
 │   ├── api_server.py
@@ -52,7 +58,9 @@ Le service :
 - expose une API REST ;
 - affiche une page web locale de résumé.
 
-La boucle de contrôle tourne toutes les `5` secondes par défaut.
+La boucle solaire tourne toutes les `5` secondes par défaut.
+La lecture Tesla est mise en cache `30` secondes par défaut pour éviter de solliciter inutilement le véhicule.
+Si le proxy local de commandes n’est pas disponible, un nouvel essai n’est tenté qu’après `60` secondes par défaut.
 
 ### Variables d’environnement
 
@@ -66,6 +74,8 @@ La boucle de contrôle tourne toutes les `5` secondes par défaut.
 - `TESLA_VEHICLE_NAME` : optionnel
 - `TESLA_VEHICLE_INDEX` : défaut `0`
 - `CONTROL_INTERVAL_SEC` : défaut `5`
+- `TESLA_STATUS_INTERVAL_SEC` : défaut `30`
+- `TESLA_PROXY_RETRY_SEC` : défaut `60`
 - `TESLA_MIN_AMPS` : défaut `6`
 - `TESLA_MAX_AMPS` : défaut `32`
 - `APP_HOST` : défaut `0.0.0.0`
@@ -110,6 +120,8 @@ L’interface locale sera disponible sur :
 http://<ip-de-la-raspberry>:8080/
 ```
 
+Tant que rien n’écoute sur `TESLA_PROXY_URL` (par défaut `http://localhost:4443`), l’application reste utile pour la supervision solaire et Tesla, mais passe de fait en lecture seule pour les commandes de charge.
+
 ### API REST
 
 - `GET /solar`
@@ -125,37 +137,24 @@ curl -X POST http://raspberrypi:8080/tesla/amps \
   -d '{"amps": 10}'
 ```
 
-### Exemple systemd
+### Fichiers systemd versionnés
 
-Créer `/etc/systemd/system/tesla-charge.service` :
+Le dépôt contient maintenant les fichiers prêts à copier dans `deploy/systemd/` :
 
-```ini
-[Unit]
-Description=Tesla charge on solar surplus
-After=network-online.target
-Wants=network-online.target
+- `deploy/systemd/tesla-charge.service`
+- `deploy/systemd/tesla-charge.env.example`
+- `deploy/systemd/tesla-command-proxy.service.example`
+- `deploy/systemd/README.md`
 
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/git/tesla-charge/raspberry
-Environment=ENPHASE_TOKEN=remplacer_par_le_token
-Environment=TESLA_CLIENT_ID=remplacer_par_le_client_id
-ExecStart=/home/pi/git/tesla-charge/raspberry/.venv/bin/python /home/pi/git/tesla-charge/raspberry/app.py
-Restart=always
-RestartSec=10
+Les unités `systemd` sont à installer dans :
 
-[Install]
-WantedBy=multi-user.target
+```text
+/etc/systemd/system/
 ```
 
-Puis :
+Les fichiers versionnés supposent un utilisateur Raspberry nommé `olivier`. Si besoin, adapte `User=` et les chemins `/home/olivier/...`.
 
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now tesla-charge
-sudo systemctl status tesla-charge
-```
+L’application Python ne doit pas démarrer elle-même le proxy local. Le proxy de commandes Tesla doit rester un service séparé, plus simple à superviser et redémarrer.
 
 ## 2. Sous-domaine `tesla.opcoach.com`
 
@@ -233,6 +232,7 @@ python3 -m py_compile app.py api_server.py config.py control_loop.py solar_monit
 Le dépôt ignore notamment :
 
 - `tesla-refresh-token.json`
+- `deploy/systemd/*.env`
 - les artefacts Python
 - les environnements virtuels
 - les fichiers `.env`

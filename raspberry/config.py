@@ -34,6 +34,8 @@ class AppConfig:
     tesla_vehicle_name: str | None
     tesla_vehicle_index: int
     poll_interval_seconds: int
+    tesla_status_interval_seconds: int
+    tesla_proxy_retry_seconds: int
     api_host: str
     api_port: int
     min_amps: int
@@ -62,6 +64,14 @@ class AppConfig:
             raise ValueError(f"Variables d'environnement manquantes: {names}")
 
         poll_interval_seconds = max(1, _get_int("CONTROL_INTERVAL_SEC", 5))
+        tesla_status_interval_seconds = max(
+            poll_interval_seconds,
+            _get_int("TESLA_STATUS_INTERVAL_SEC", 30),
+        )
+        tesla_proxy_retry_seconds = max(
+            poll_interval_seconds,
+            _get_int("TESLA_PROXY_RETRY_SEC", 60),
+        )
         min_amps = _get_int("TESLA_MIN_AMPS", 6)
         max_amps = _get_int("TESLA_MAX_AMPS", 32)
         if min_amps < 6:
@@ -90,6 +100,8 @@ class AppConfig:
             tesla_vehicle_name=os.getenv("TESLA_VEHICLE_NAME") or None,
             tesla_vehicle_index=max(0, _get_int("TESLA_VEHICLE_INDEX", 0)),
             poll_interval_seconds=poll_interval_seconds,
+            tesla_status_interval_seconds=tesla_status_interval_seconds,
+            tesla_proxy_retry_seconds=tesla_proxy_retry_seconds,
             api_host=os.getenv("APP_HOST", "0.0.0.0"),
             api_port=_get_int("APP_PORT", 8080),
             min_amps=min_amps,

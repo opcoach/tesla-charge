@@ -1,0 +1,17 @@
+[Unit]
+Description=Proxy local Tesla pour commandes signées
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olivier
+WorkingDirectory=/home/olivier/git/tesla-charge
+# Remplacer ExecStart par la vraie commande qui lance le proxy local sur 127.0.0.1:4443.
+ExecStart=/CHEMIN/DU/PROXY --listen 127.0.0.1:4443
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

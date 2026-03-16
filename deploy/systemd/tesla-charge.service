@@ -1,0 +1,17 @@
+[Unit]
+Description=Pilotage Tesla sur surplus solaire
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=olivier
+WorkingDirectory=/home/olivier/git/tesla-charge/raspberry
+EnvironmentFile=/etc/default/tesla-charge
+ExecStart=/home/olivier/git/tesla-charge/raspberry/.venv/bin/python /home/olivier/git/tesla-charge/raspberry/app.py
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
