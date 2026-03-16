@@ -8,7 +8,11 @@ env/
 .env
 .env.*
 
-solar/cache.json
+raspberry/solar/cache.json
+tesla-oauth-config.php
+tesla-refresh-token.json
+tesla.opcoach.com/tesla-oauth-config.php
+tesla.opcoach.com/tesla-refresh-token.json
 
 *.log
 .DS_Store
