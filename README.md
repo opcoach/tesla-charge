@@ -167,7 +167,7 @@ Déployer uniquement le contenu du répertoire `tesla.opcoach.com/` sur le sous-
 Important :
 
 - ne pas publier le répertoire `raspberry/` sur le site public ;
-- le dépôt contient déjà `tesla.opcoach.com/tesla-oauth-config.php` avec des placeholders à remplacer ;
+- créer le vrai `tesla-oauth-config.php` à la racine du dépôt sur le serveur, hors du dossier web ;
 - publier la clé publique ici :
   `https://tesla.opcoach.com/.well-known/appspecific/com.tesla.3p.public-key.pem`
 
@@ -181,7 +181,7 @@ Dans l’interface Tesla :
 
 ### Configuration Tesla
 
-Le dépôt contient déjà `tesla.opcoach.com/tesla-oauth-config.php`. Il faut simplement remplacer :
+Ne versionne pas `tesla-oauth-config.php`. Crée `/home/compte/tesla-charge/tesla-oauth-config.php` sur le serveur à partir de `tesla.opcoach.com/tesla-oauth-config.php.example`, puis remplace :
 
 - `REMPLACER_PAR_LE_CLIENT_ID_TESLA`
 - `REMPLACER_PAR_LE_CLIENT_SECRET_TESLA`
@@ -198,9 +198,10 @@ Exemple d’emplacement :
 
 ```text
 /home/compte/tesla-charge/
+├── tesla-oauth-config.php
 ├── tesla-refresh-token.json
 └── tesla.opcoach.com/
-    └── tesla-oauth-config.php
+    └── tesla-oauth-config.php.example
 ```
 
 ### Démarrage du flux OAuth

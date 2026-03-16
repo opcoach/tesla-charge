@@ -20,18 +20,17 @@ tesla.opcoach.com/
 │   └── callback/
 │       └── index.php
 ├── index.php
-├── tesla-oauth-config.php
 └── tesla-oauth-config.php.example
 ```
 
 ## Fichier de configuration
 
-Le dépôt contient déjà `tesla-oauth-config.php` avec des placeholders. Il faut remplacer :
+Créer `/home/compte/tesla-charge/tesla-oauth-config.php` sur le serveur à partir de `tesla-oauth-config.php.example`, puis remplacer :
 
 - `REMPLACER_PAR_LE_CLIENT_ID_TESLA`
 - `REMPLACER_PAR_LE_CLIENT_SECRET_TESLA`
 
-Le modèle `tesla-oauth-config.php.example` reste disponible comme référence.
+Le fichier réel `tesla-oauth-config.php` ne doit pas être versionné et doit rester hors du dossier web.
 
 Pour un compte Tesla utilisé en France, l’audience par défaut à configurer est :
 
