@@ -26,6 +26,7 @@ class AppConfig:
     envoy_url: str
     envoy_token: str
     envoy_verify_ssl: bool
+    app_timezone: str
     tesla_client_id: str | None
     tesla_refresh_token_file: str
     tesla_api_base_url: str
@@ -36,8 +37,11 @@ class AppConfig:
     tesla_vehicle_name: str | None
     tesla_vehicle_index: int
     poll_interval_seconds: int
+    idle_poll_interval_seconds: int
     tesla_status_interval_seconds: int
     tesla_proxy_retry_seconds: int
+    day_active_start: str
+    day_active_end: str
     api_host: str
     api_port: int
     min_amps: int
@@ -73,6 +77,10 @@ class AppConfig:
             raise ValueError(f"Variables d'environnement manquantes: {names}")
 
         poll_interval_seconds = max(1, _get_int("CONTROL_INTERVAL_SEC", 5))
+        idle_poll_interval_seconds = max(
+            poll_interval_seconds,
+            _get_int("CONTROL_IDLE_INTERVAL_SEC", 900),
+        )
         tesla_status_interval_seconds = max(
             poll_interval_seconds,
             _get_int("TESLA_STATUS_INTERVAL_SEC", 30),
@@ -95,6 +103,7 @@ class AppConfig:
             ).rstrip("/"),
             envoy_token=envoy_token,
             envoy_verify_ssl=_get_bool("ENVOY_VERIFY_SSL", False),
+            app_timezone=os.getenv("APP_TIMEZONE", "Europe/Paris").strip() or "Europe/Paris",
             tesla_client_id=tesla_client_id,
             tesla_refresh_token_file=str(token_path),
             tesla_api_base_url=os.getenv(
@@ -111,8 +120,11 @@ class AppConfig:
             tesla_vehicle_name=os.getenv("TESLA_VEHICLE_NAME") or None,
             tesla_vehicle_index=max(0, _get_int("TESLA_VEHICLE_INDEX", 0)),
             poll_interval_seconds=poll_interval_seconds,
+            idle_poll_interval_seconds=idle_poll_interval_seconds,
             tesla_status_interval_seconds=tesla_status_interval_seconds,
             tesla_proxy_retry_seconds=tesla_proxy_retry_seconds,
+            day_active_start=os.getenv("DAY_ACTIVE_START", "07:00").strip() or "07:00",
+            day_active_end=os.getenv("DAY_ACTIVE_END", "22:00").strip() or "22:00",
             api_host=os.getenv("APP_HOST", "0.0.0.0"),
             api_port=_get_int("APP_PORT", 8080),
             min_amps=min_amps,

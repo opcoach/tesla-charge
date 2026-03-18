@@ -63,6 +63,7 @@ Le service :
 La boucle solaire tourne toutes les `5` secondes par défaut.
 La lecture Tesla est mise en cache `30` secondes par défaut pour éviter de solliciter inutilement le véhicule.
 Si le proxy local de commandes n’est pas disponible, un nouvel essai n’est tenté qu’après `60` secondes par défaut.
+La boucle passe en veille hors plage de jour, avec un réveil plus rare toutes les `900` secondes par défaut.
 
 ### Variables d’environnement
 
@@ -77,9 +78,13 @@ Si le proxy local de commandes n’est pas disponible, un nouvel essai n’est t
 - `TESLA_PROXY_CA_FILE` : optionnel, chemin vers un certificat local si tu veux vérifier TLS
 - `TESLA_VEHICLE_NAME` : optionnel
 - `TESLA_VEHICLE_INDEX` : défaut `0`
+- `APP_TIMEZONE` : défaut `Europe/Paris`
 - `CONTROL_INTERVAL_SEC` : défaut `5`
+- `CONTROL_IDLE_INTERVAL_SEC` : défaut `900`
 - `TESLA_STATUS_INTERVAL_SEC` : défaut `30`
 - `TESLA_PROXY_RETRY_SEC` : défaut `60`
+- `DAY_ACTIVE_START` : défaut `07:00`
+- `DAY_ACTIVE_END` : défaut `22:00`
 - `TESLA_MIN_AMPS` : défaut `6`
 - `TESLA_MAX_AMPS` : défaut `32`
 - `APP_HOST` : défaut `0.0.0.0`
@@ -140,6 +145,29 @@ http://<ip-de-la-raspberry>:8080/
 ```
 
 Tant que rien n’écoute sur `TESLA_PROXY_URL` (par défaut `https://localhost:4443`), l’application reste utile pour la supervision solaire et Tesla, mais passe de fait en lecture seule pour les commandes de charge.
+
+### Logique horaire
+
+Par défaut :
+
+- mode actif en journée ;
+- mode veille hors plage de jour.
+
+Le comportement par défaut correspond à :
+
+```text
+APP_TIMEZONE=Europe/Paris
+CONTROL_INTERVAL_SEC=5
+CONTROL_IDLE_INTERVAL_SEC=900
+DAY_ACTIVE_START=07:00
+DAY_ACTIVE_END=22:00
+```
+
+Conséquence :
+
+- entre `07:00` et `22:00`, la régulation fonctionne normalement ;
+- entre `22:00` et `07:00`, la boucle ralentit fortement ;
+- aucune logique spécifique heures creuses n’est appliquée.
 
 ### Vérifications utiles
 
