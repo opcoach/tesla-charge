@@ -357,3 +357,34 @@ Le dépôt ignore notamment :
 - les fichiers privés OAuth et les tokens de `tesla.opcoach.com`
 
 Le cache Tesla, les secrets OAuth et les tokens ne doivent pas être versionnés.
+
+### Dépôt public et valeurs locales
+
+Si le dépôt est rendu public, il est recommandé de ne laisser dans Git que des valeurs d’exemple ou génériques.
+
+Les vraies valeurs doivent rester uniquement :
+
+- dans `/etc/default/tesla-charge` pour le service principal ;
+- dans `/etc/systemd/system/tesla-charge.service` si tu l’as adapté localement ;
+- dans `/etc/systemd/system/tesla-command-proxy.service` si tu l’as adapté localement ;
+- dans `deploy/systemd/tesla-charge.env` en local seulement, non versionné ;
+- dans `tesla-refresh-token.json`, non versionné ;
+- dans `raspberry/proxy/*.pem`, non versionnés ;
+- dans `tesla-oauth-config.php`, hors Git et hors webroot.
+
+Exemple de workflow :
+
+```bash
+cp deploy/systemd/tesla-charge.env.example deploy/systemd/tesla-charge.env
+nano deploy/systemd/tesla-charge.env
+sudo cp deploy/systemd/tesla-charge.env /etc/default/tesla-charge
+```
+
+Dans ce modèle :
+
+- le dépôt peut contenir des exemples génériques ;
+- `git pull` met à jour le code et les exemples ;
+- les vraies valeurs restent en dehors des fichiers versionnés ;
+- un `git pull` n’écrase pas `/etc/default/tesla-charge`.
+
+Si tu modifies un fichier versionné pour y mettre une vraie valeur, il faudra la remettre après un `git pull`. Il vaut donc mieux éviter ce mode de fonctionnement.
