@@ -108,6 +108,21 @@ Copier ensuite le fichier `tesla-refresh-token.json` généré par le callback w
 scp /chemin/local/vers/tesla-refresh-token.json pi@raspberrypi:git/tesla-charge/tesla-refresh-token.json
 ```
 
+### Composants système nécessaires
+
+Sur une installation Raspberry Pi OS Lite récente, les composants suivants ont été nécessaires :
+
+- `python3-venv` pour créer l’environnement virtuel Python
+- `openssl` pour générer le certificat TLS local du proxy
+- `go` uniquement si tu compiles `tesla-http-proxy` directement sur la Raspberry
+
+Exemple :
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv openssl golang
+```
+
 ### Lancement manuel
 
 ```bash
@@ -125,6 +140,32 @@ http://<ip-de-la-raspberry>:8080/
 ```
 
 Tant que rien n’écoute sur `TESLA_PROXY_URL` (par défaut `https://localhost:4443`), l’application reste utile pour la supervision solaire et Tesla, mais passe de fait en lecture seule pour les commandes de charge.
+
+### Vérifications utiles
+
+Vérifier l’application web :
+
+```bash
+curl http://127.0.0.1:8080/status
+```
+
+Vérifier le proxy local Tesla :
+
+```bash
+ss -ltnp | grep 4443
+```
+
+Vérifier le service principal :
+
+```bash
+sudo systemctl status tesla-charge --no-pager
+```
+
+Vérifier le proxy :
+
+```bash
+sudo systemctl status tesla-command-proxy --no-pager
+```
 
 ### API REST
 
@@ -162,6 +203,38 @@ L’application Python ne doit pas démarrer elle-même le proxy local. Le proxy
 
 Le proxy local Tesla officiel est `tesla-http-proxy`. Il écoute en HTTPS, pas en HTTP.
 
+### Clés et certificats du proxy
+
+Le proxy local Tesla a besoin de trois fichiers :
+
+- une clé privée Fleet API, correspondant à la clé publique publiée sur le sous-domaine web ;
+- un certificat TLS local ;
+- une clé privée TLS locale.
+
+Exemple de préparation :
+
+```bash
+mkdir -p "$HOME/git/tesla-charge/raspberry/proxy"
+
+cp /chemin/vers/la_vraie_cle_privee_fleet.pem \
+  "$HOME/git/tesla-charge/raspberry/proxy/fleet-key.pem"
+chmod 600 "$HOME/git/tesla-charge/raspberry/proxy/fleet-key.pem"
+
+openssl req -x509 -nodes -newkey rsa:2048 \
+  -keyout "$HOME/git/tesla-charge/raspberry/proxy/tls-key.pem" \
+  -out "$HOME/git/tesla-charge/raspberry/proxy/tls-cert.pem" \
+  -days 3650 \
+  -subj "/CN=localhost"
+
+chmod 600 "$HOME/git/tesla-charge/raspberry/proxy/tls-key.pem"
+```
+
+Important :
+
+- `fleet-key.pem` doit contenir une clé privée, pas une clé publique ;
+- si `openssl pkey -in .../fleet-key.pem -noout` échoue, le fichier n’est pas le bon ;
+- si tu perds la vraie clé privée Fleet, il faut régénérer une paire, republier la clé publique et refaire le pairing Tesla.
+
 ## 2. Sous-domaine `tesla.opcoach.com`
 
 Le composant `tesla.opcoach.com/` est un petit site PHP sans framework pour :
@@ -190,6 +263,13 @@ Dans l’interface Tesla :
 - `URL d'origine autorisée` : `https://tesla.opcoach.com`
 - `URI de redirection autorisée` : `https://tesla.opcoach.com/auth/callback/`
 - `URL de renvoi autorisée` : `https://tesla.opcoach.com/logout/callback/`
+
+De manière générique, si le domaine change plus tard :
+
+- origine : `https://<app-domain>`
+- callback OAuth : `https://<app-domain>/auth/callback/`
+- logout callback : `https://<app-domain>/logout/callback/`
+- clé publique : `https://<app-domain>/.well-known/appspecific/com.tesla.3p.public-key.pem`
 
 ### Configuration Tesla
 
@@ -223,6 +303,38 @@ https://tesla.opcoach.com/auth/start/
 ```
 
 Après consentement, le callback sauvegarde le `refresh_token` dans le fichier privé configuré.
+
+### Enregistrement partner account
+
+Après création de l’application et publication de la clé publique, il faut enregistrer le domaine auprès de Fleet API.
+
+Exemple pour la région Europe :
+
+```bash
+CLIENT_ID='...'
+CLIENT_SECRET='...'
+AUDIENCE='https://fleet-api.prd.eu.vn.cloud.tesla.com'
+
+PARTNER_TOKEN=$(
+  curl -s --request POST \
+    --url 'https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token' \
+    --header 'Content-Type: application/x-www-form-urlencoded' \
+    --data-urlencode 'grant_type=client_credentials' \
+    --data-urlencode "client_id=${CLIENT_ID}" \
+    --data-urlencode "client_secret=${CLIENT_SECRET}" \
+    --data-urlencode "audience=${AUDIENCE}" \
+    --data-urlencode 'scope=openid vehicle_device_data vehicle_cmds vehicle_charging_cmds' \
+  | jq -r '.access_token'
+)
+
+curl --request POST \
+  --url "${AUDIENCE}/api/1/partner_accounts" \
+  --header "Authorization: Bearer ${PARTNER_TOKEN}" \
+  --header 'Content-Type: application/json' \
+  --data '{"domain":"tesla.opcoach.com"}'
+```
+
+Une fois le domaine enregistré, il reste à faire le key pairing pour les commandes signées.
 
 ## 3. Développement
 
