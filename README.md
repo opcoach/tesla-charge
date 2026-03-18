@@ -1,5 +1,12 @@
 # tesla-charge
 
+Une application pour adapter la charge de la tesla selon le surplus de production des panneaux solaires renvoyé sur le réseau. Permet d'optimiser la charge sans importer de courant supplémentaire. 
+Application installée sur une très vieille raspberry pi (Model B + 512 Mb) qui trainait dans un coin. 
+Ne pouvant pas utiliser l'application [evcc]([url](https://evcc.io/en/)) qui nécessite une carte plus récente, j'ai tout redéveloppé avec codex en une dizaine d'heures. 
+
+<img width="2080" height="1318" alt="image" src="https://github.com/user-attachments/assets/6cac6e93-226b-4f4c-bbef-9c06fb3161e7" />
+
+
 Dépôt unique pour deux composants complémentaires :
 
 - `raspberry/` : service Python léger qui tourne en continu sur une Raspberry Pi et ajuste la charge Tesla selon le surplus solaire ;
