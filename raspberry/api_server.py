@@ -51,12 +51,26 @@ DASHBOARD_HTML = """
     }
     .subhead {
       color: var(--muted);
+      margin-bottom: 18px;
+    }
+    .timing {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
       margin-bottom: 24px;
     }
-    .summary {
+    .timing .pill {
+      background: rgba(255, 253, 248, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 8px 12px;
+    }
+    .summary-row {
       display: grid;
       gap: 14px;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       margin-bottom: 24px;
     }
     .card {
@@ -107,6 +121,9 @@ DASHBOARD_HTML = """
       main {
         padding: 18px 12px 28px;
       }
+      .summary-row {
+        grid-template-columns: 1fr;
+      }
       .card {
         border-radius: 14px;
       }
@@ -117,10 +134,16 @@ DASHBOARD_HTML = """
   <main>
     <h1>Tesla Charge</h1>
     <div class="subhead">
-      Résumé de la charge sur surplus solaire. Mise à jour automatique toutes les {{ refresh_ms // 1000 }} secondes.
+      Résumé de la charge sur surplus solaire.
+    </div>
+    <div class="timing">
+      <div class="pill">Page web : toutes les {{ refresh_ms // 1000 }} s</div>
+      <div class="pill">Régulation : <span id="loop-interval">{{ loop_interval_seconds }}</span> s</div>
+      <div class="pill">Tesla : environ toutes les {{ tesla_refresh_seconds }} s</div>
+      <div class="pill">Mode : <span id="schedule-mode">--</span></div>
     </div>
 
-    <section class="summary">
+    <section class="summary-row">
       <article class="card">
         <div class="label">Production solaire</div>
         <div class="value" id="production">--</div>
@@ -133,6 +156,9 @@ DASHBOARD_HTML = """
         <div class="label">Réseau</div>
         <div class="value" id="grid">--</div>
       </article>
+    </section>
+
+    <section class="summary-row">
       <article class="card">
         <div class="label">Batterie Tesla</div>
         <div class="value" id="battery">--</div>
@@ -229,6 +255,8 @@ DASHBOARD_HTML = """
         setText("vehicle-name", tesla.vehicle_name || "--");
         setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
         setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
+        setText("loop-interval", loop.current_interval_seconds || "--");
+        setText("schedule-mode", loop.schedule_mode || "--");
 
         const error = loop.last_error || data.solar.last_error || data.tesla.last_error || "Aucune";
         const errorClass = error === "Aucune" ? "state-ok" : "state-error";
@@ -259,6 +287,8 @@ def create_app(
         return render_template_string(
             DASHBOARD_HTML,
             refresh_ms=config.poll_interval_seconds * 1000,
+            loop_interval_seconds=config.poll_interval_seconds,
+            tesla_refresh_seconds=config.tesla_status_interval_seconds,
         )
 
     @app.get("/solar")
