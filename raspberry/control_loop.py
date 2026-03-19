@@ -90,15 +90,18 @@ class ControlLoop:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._cycle_lock = threading.Lock()
         self._timezone = self._build_timezone(config.app_timezone)
         self._day_active_window = self._parse_window(
             config.day_active_start,
             config.day_active_end,
         )
+        self._active_poll_interval_seconds = config.poll_interval_seconds
+        self._idle_poll_interval_seconds = config.idle_poll_interval_seconds
         self._status = LoopStatus(
             running=False,
-            poll_interval_seconds=config.poll_interval_seconds,
-            current_interval_seconds=config.poll_interval_seconds,
+            poll_interval_seconds=self._active_poll_interval_seconds,
+            current_interval_seconds=self._active_poll_interval_seconds,
             schedule_mode="active_day",
             desired_amps=None,
             applied_amps=None,
@@ -123,8 +126,8 @@ class ControlLoop:
         self._thread.start()
         LOGGER.info(
             "Boucle de contrôle démarrée, intervalle actif %s s, intervalle veille %s s",
-            self.config.poll_interval_seconds,
-            self.config.idle_poll_interval_seconds,
+            self._active_poll_interval_seconds,
+            self._idle_poll_interval_seconds,
         )
 
     def stop(self) -> None:
@@ -152,6 +155,59 @@ class ControlLoop:
             "samples": samples,
         }
 
+    def update_runtime_intervals(
+        self,
+        *,
+        active_poll_interval_seconds: int | None = None,
+        tesla_status_interval_seconds: int | None = None,
+    ) -> dict[str, int]:
+        with self._lock:
+            if active_poll_interval_seconds is not None:
+                self._active_poll_interval_seconds = max(1, int(active_poll_interval_seconds))
+                self._status.poll_interval_seconds = self._active_poll_interval_seconds
+            if tesla_status_interval_seconds is not None:
+                self.tesla_controller.set_status_refresh_seconds(
+                    max(1, int(tesla_status_interval_seconds))
+                )
+            current_poll = self._active_poll_interval_seconds
+            current_tesla = self.tesla_controller.get_status_payload()["status_refresh_seconds"]
+        return {
+            "poll_interval_seconds": current_poll,
+            "tesla_status_interval_seconds": current_tesla,
+        }
+
+    def refresh_now(self) -> dict[str, Any]:
+        with self._cycle_lock:
+            started_at = self._now()
+            solar_snapshot = self.solar_monitor.read_snapshot()
+            tesla_snapshot = self.tesla_controller.read_status(force_refresh=True)
+            desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
+            with self._lock:
+                self._status.running = True
+                self._status.current_interval_seconds = self._active_poll_interval_seconds
+                self._status.schedule_mode = "manual_refresh"
+                self._status.desired_amps = desired_amps
+                self._status.applied_amps = tesla_snapshot.charging_amps
+                self._status.last_reason = "manual_refresh"
+                self._status.last_run_at = started_at.isoformat()
+                self._status.last_success_at = started_at.isoformat()
+                self._status.last_error = None
+            self._record_history_sample(
+                recorded_at=started_at,
+                schedule_mode="manual_refresh",
+                solar_snapshot=solar_snapshot,
+                tesla_snapshot=tesla_snapshot,
+                desired_amps=desired_amps,
+                decision={
+                    "applied_amps": tesla_snapshot.charging_amps,
+                    "reason": "manual_refresh",
+                    "command": None,
+                    "command_result": None,
+                },
+                error_message=None,
+            )
+            return self.get_status_payload()
+
     def _run(self) -> None:
         with self._lock:
             self._status.running = True
@@ -177,28 +233,29 @@ class ControlLoop:
                     self._stop_event.wait(wait_seconds)
                     continue
 
-                solar_snapshot = self.solar_monitor.read_snapshot()
-                tesla_snapshot = self.tesla_controller.read_status()
-                desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
-                decision = self._apply_decision(desired_amps, tesla_snapshot)
+                with self._cycle_lock:
+                    solar_snapshot = self.solar_monitor.read_snapshot()
+                    tesla_snapshot = self.tesla_controller.read_status()
+                    desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
+                    decision = self._apply_decision(desired_amps, tesla_snapshot)
 
-                with self._lock:
-                    self._status.running = True
-                    self._status.current_interval_seconds = wait_seconds
-                    self._status.schedule_mode = schedule_mode
-                    self._status.desired_amps = desired_amps
-                    self._status.applied_amps = decision["applied_amps"]
-                    self._status.last_reason = decision["reason"]
-                    self._status.last_run_at = started_at.isoformat()
-                    self._status.last_success_at = started_at.isoformat()
-                    self._status.last_error = None
+                    with self._lock:
+                        self._status.running = True
+                        self._status.current_interval_seconds = wait_seconds
+                        self._status.schedule_mode = schedule_mode
+                        self._status.desired_amps = desired_amps
+                        self._status.applied_amps = decision["applied_amps"]
+                        self._status.last_reason = decision["reason"]
+                        self._status.last_run_at = started_at.isoformat()
+                        self._status.last_success_at = started_at.isoformat()
+                        self._status.last_error = None
 
-                LOGGER.info(
-                    "Contrôle: surplus=%s W cible=%s A résultat=%s",
-                    solar_snapshot.export_watts,
-                    desired_amps,
-                    decision["reason"],
-                )
+                    LOGGER.info(
+                        "Contrôle: surplus=%s W cible=%s A résultat=%s",
+                        solar_snapshot.export_watts,
+                        desired_amps,
+                        decision["reason"],
+                    )
             except Exception as exc:
                 error_message = str(exc)
                 with self._lock:
@@ -455,8 +512,8 @@ class ControlLoop:
     def _get_schedule_mode(self) -> tuple[str, int]:
         current_local_time = datetime.now(self._timezone).time()
         if self._day_active_window.contains(current_local_time):
-            return "active_day", self.config.poll_interval_seconds
-        return "idle_night", self.config.idle_poll_interval_seconds
+            return "active_day", self._active_poll_interval_seconds
+        return "idle_night", self._idle_poll_interval_seconds
 
     def _build_timezone(self, timezone_name: str) -> ZoneInfo:
         try:

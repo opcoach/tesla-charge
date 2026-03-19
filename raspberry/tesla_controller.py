@@ -70,11 +70,12 @@ class TeslaController:
         self._last_logged_error: str | None = None
         self._last_logged_error_at: datetime | None = None
         self._proxy_unavailable_until: datetime | None = None
+        self._status_refresh_seconds = self.config.tesla_status_interval_seconds
 
-    def read_status(self) -> TeslaSnapshot:
+    def read_status(self, force_refresh: bool = False) -> TeslaSnapshot:
         try:
             with self._lock:
-                if self._has_recent_snapshot():
+                if not force_refresh and self._has_recent_snapshot():
                     return self._last_snapshot  # type: ignore[return-value]
 
                 vehicle = self._ensure_vehicle()
@@ -95,6 +96,10 @@ class TeslaController:
         except Exception as exc:
             self.record_error(exc)
             raise
+
+    def set_status_refresh_seconds(self, seconds: int) -> None:
+        with self._lock:
+            self._status_refresh_seconds = max(1, int(seconds))
 
     def set_charging_amps(self, amps: int, source: str = "manual") -> dict[str, Any]:
         clamped_amps = max(self.config.min_amps, min(self.config.max_amps, int(amps)))
@@ -264,12 +269,14 @@ class TeslaController:
             error = self._last_error
             last_commanded_amps = self._last_commanded_amps
             last_commanded_at = self._last_commanded_at.isoformat() if self._last_commanded_at else None
+            status_refresh_seconds = self._status_refresh_seconds
         return {
             "available": snapshot is not None,
             "snapshot": snapshot,
             "last_error": error,
             "last_commanded_amps": last_commanded_amps,
             "last_commanded_at": last_commanded_at,
+            "status_refresh_seconds": status_refresh_seconds,
         }
 
     def close(self) -> None:
@@ -448,7 +455,7 @@ class TeslaController:
             return False
         return (
             datetime.now(timezone.utc) - self._last_snapshot_at
-        ) < timedelta(seconds=self.config.tesla_status_interval_seconds)
+        ) < timedelta(seconds=self._status_refresh_seconds)
 
     def _is_proxy_in_cooldown(self) -> bool:
         if self._proxy_unavailable_until is None:

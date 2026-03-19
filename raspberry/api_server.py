@@ -44,9 +44,40 @@ DASHBOARD_HTML = """
       margin: 0 auto;
       padding: 24px 16px 40px;
     }
+    .title-row {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .title-lockup {
+      position: relative;
+      display: inline-flex;
+      align-items: flex-start;
+    }
+    .refresh-orb {
+      position: absolute;
+      left: -24px;
+      top: 14px;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(0, 122, 90, 0.14);
+      background:
+        conic-gradient(var(--accent) 0deg, rgba(0, 122, 90, 0.12) 0deg);
+      box-shadow: 0 0 0 1px rgba(255, 253, 248, 0.95) inset;
+    }
+    .refresh-orb::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border-radius: 999px;
+      background: var(--card);
+    }
     h1 {
-      margin: 0 0 8px;
-      font-size: clamp(2rem, 6vw, 3.2rem);
+      margin: 0;
+      font-size: clamp(2rem, 6vw, 3.1rem);
       line-height: 1;
       letter-spacing: -0.04em;
     }
@@ -57,23 +88,61 @@ DASHBOARD_HTML = """
     .timing {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
       margin-bottom: 24px;
     }
     .timing .pill {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
       background: rgba(255, 253, 248, 0.9);
       border: 1px solid var(--line);
       border-radius: 999px;
       color: var(--muted);
       font-size: 0.76rem;
-      padding: 7px 11px;
+      padding: 7px 10px;
     }
     .pill-hint {
       color: var(--muted);
       font-size: 0.68rem;
-      margin-left: 6px;
     }
-    .timing select {
+    .pill-strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .cadence-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: rgba(255, 253, 248, 0.95);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink);
+      font: inherit;
+      font-size: 0.72rem;
+      padding: 4px 8px;
+      outline: none;
+    }
+    .pill-action {
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.95);
+      color: var(--ink);
+      border-radius: 999px;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      line-height: 1;
+      font-size: 0.8rem;
+    }
+    .pill-action:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .timing select:not(.cadence-select) {
       background: transparent;
       border: 0;
       color: var(--ink);
@@ -290,14 +359,30 @@ DASHBOARD_HTML = """
 </head>
 <body>
   <main>
-    <h1>Tesla Charge</h1>
+    <div class="title-row">
+      <div class="title-lockup">
+        <span class="refresh-orb" id="refresh-orb" aria-hidden="true"></span>
+        <h1>Tesla Charge</h1>
+      </div>
+    </div>
     <div class="subhead">
       Résumé de la charge sur surplus solaire.
     </div>
     <div class="timing">
-      <div class="pill">Page web : toutes les {{ refresh_ms // 1000 }} s</div>
-      <div class="pill">Prochaine régulation : <span id="loop-countdown">--</span><span class="pill-hint">cadence <span id="loop-period">{{ loop_interval_seconds }} s</span></span></div>
-      <div class="pill">Prochaine lecture Tesla : <span id="tesla-countdown">--</span><span class="pill-hint">cadence <span id="tesla-period">{{ tesla_refresh_seconds }} s</span></span></div>
+      <div class="pill">
+        <span>Régulation</span>
+        <strong class="pill-strong" id="loop-period">{{ loop_interval_seconds }} s</strong>
+        <select id="loop-interval-select" class="cadence-select" data-current="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
+        <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture et une régulation maintenant">↻</button>
+        <span class="pill-hint">dans <span id="loop-countdown">--</span></span>
+      </div>
+      <div class="pill">
+        <span>Tesla</span>
+        <strong class="pill-strong" id="tesla-period">{{ tesla_refresh_seconds }} s</strong>
+        <select id="tesla-interval-select" class="cadence-select" data-current="{{ tesla_refresh_seconds }}" aria-label="Changer la cadence de lecture Tesla"></select>
+        <button class="pill-action" type="button" data-refresh-action="tesla" title="Forcer une lecture Tesla maintenant">↻</button>
+        <span class="pill-hint">dans <span id="tesla-countdown">--</span></span>
+      </div>
       <div class="pill">Mode : <span id="schedule-mode">--</span></div>
     </div>
 
@@ -409,7 +494,7 @@ DASHBOARD_HTML = """
             <div class="chart-title">
               Puissance
             </div>
-            <div class="chart-subtitle">Production et consommation de la maison</div>
+            <div class="chart-subtitle">Si Maison est au-dessus de Production, la maison consomme plus qu'elle ne produit.</div>
           </div>
           <div class="chart-head-actions">
             <span class="chart-help" title="Montre la production solaire et la consommation maison. La courbe réseau est séparée pour éviter de confondre export et import avec le reste.">i</span>
@@ -427,9 +512,9 @@ DASHBOARD_HTML = """
         <div class="chart-head">
           <div>
             <div class="chart-title">
-              Réseau
+              Import du réseau
             </div>
-            <div class="chart-subtitle">Export négatif, import positif</div>
+            <div class="chart-subtitle">Export négatif, import positif, zéro en bleu pour lire l'équilibre.</div>
           </div>
           <div class="chart-head-actions">
             <span class="chart-help" title="Montre l'export et l'import réseau. Les valeurs négatives sont l'export, les valeurs positives l'import.">i</span>
@@ -448,7 +533,7 @@ DASHBOARD_HTML = """
             <div class="chart-title">
               Tesla
             </div>
-            <div class="chart-subtitle">Intensité réelle et consigne</div>
+            <div class="chart-subtitle">La consigne est ce qu'on demande, l'intensité est ce que la voiture applique réellement.</div>
           </div>
           <div class="chart-head-actions">
             <span class="chart-help" title="Montre l'intensité réellement appliquée et la consigne calculée pour la voiture.">i</span>
@@ -486,6 +571,7 @@ DASHBOARD_HTML = """
         <div class="meta-line"><span>Véhicule</span><strong id="vehicle-name">--</strong></div>
         <div class="meta-line"><span>État véhicule</span><strong id="vehicle-state">--</strong></div>
         <div class="meta-line"><span>Branchée</span><strong id="plugged-in">--</strong></div>
+        <div class="meta-line"><span>Dernière consigne</span><strong id="last-commanded-amps">--</strong></div>
         <div class="meta-line"><span>Dernière commande</span><strong id="last-commanded-at">--</strong></div>
         <div class="meta-line"><span>Erreur</span><strong id="error">Aucune</strong></div>
       </article>
@@ -501,6 +587,7 @@ DASHBOARD_HTML = """
     const historyWindowSeconds = {{ history_window_seconds }};
     const teslaRefreshSeconds = {{ tesla_refresh_seconds }};
     const zoomWindowSeconds = 600;
+    const cadenceOptions = [5, 10, 15, 30, 60, 120, 300];
     const powerChartId = "power-chart";
     const gridChartId = "grid-chart";
     const ampsChartId = "amps-chart";
@@ -508,16 +595,39 @@ DASHBOARD_HTML = """
       status: null,
       timeline: { window_seconds: historyWindowSeconds, samples: [] },
     };
+    const pageState = {
+      lastRefreshAt: Date.now(),
+    };
     const chartState = {
       power: false,
       grid: false,
       amps: false,
     };
     const chartWindowSelect = document.getElementById("chart-window");
+    const loopIntervalSelect = document.getElementById("loop-interval-select");
+    const teslaIntervalSelect = document.getElementById("tesla-interval-select");
     const storedWindow = localStorage.getItem("tesla-charge-chart-window");
     if (storedWindow && ["900", "1800", "3600"].includes(storedWindow)) {
       chartWindowSelect.value = storedWindow;
     }
+
+    function populateCadenceSelect(select) {
+      if (!select) return;
+      const current = parseInt(select.dataset.current || "", 10);
+      select.innerHTML = "";
+      cadenceOptions.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = String(value);
+        option.textContent = `${value} s`;
+        if (Number.isFinite(current) && current === value) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+    }
+
+    populateCadenceSelect(loopIntervalSelect);
+    populateCadenceSelect(teslaIntervalSelect);
 
     function fmtWatts(value) {
       if (value === null || value === undefined) return "--";
@@ -565,6 +675,18 @@ DASHBOARD_HTML = """
       return `${hours} h ${String(mins).padStart(2, "0")} min`;
     }
 
+    function fmtCountdownSeconds(seconds) {
+      if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return "--";
+      const value = Math.max(0, Math.round(seconds));
+      if (value < 60) return `${value} s`;
+      const minutes = Math.floor(value / 60);
+      const remainder = value % 60;
+      if (minutes < 60) return `${minutes} min ${String(remainder).padStart(2, "0")} s`;
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours} h ${String(mins).padStart(2, "0")} min`;
+    }
+
     function setText(id, value, className) {
       const node = document.getElementById(id);
       if (!node.dataset.baseClass) {
@@ -585,6 +707,16 @@ DASHBOARD_HTML = """
       const ts = isoToMs(value);
       if (baseMs === null || ts === null) return null;
       return Math.max(0, (baseMs - ts) / 1000);
+    }
+
+    function updateRefreshOrb() {
+      const orb = document.getElementById("refresh-orb");
+      if (!orb) return;
+      const elapsedSeconds = (Date.now() - pageState.lastRefreshAt) / 1000;
+      const progress = Math.min(1, Math.max(0, elapsedSeconds / (refreshMs / 1000)));
+      const angle = Math.max(0, Math.min(360, progress * 360));
+      orb.style.background = `conic-gradient(var(--accent) 0deg ${angle}deg, rgba(0, 122, 90, 0.12) ${angle}deg 360deg)`;
+      orb.style.boxShadow = `0 0 0 1px rgba(255, 253, 248, 0.95) inset, 0 0 0 ${Math.round(progress * 4)}px rgba(0, 122, 90, ${0.08 * (1 - progress)})`;
     }
 
     function currentWindowSeconds() {
@@ -733,7 +865,7 @@ DASHBOARD_HTML = """
           y1: zeroY,
           x2: width - pad.right,
           y2: zeroY,
-          stroke: "rgba(179, 92, 0, 0.55)",
+          stroke: options.zeroLineColor || "rgba(44, 90, 160, 0.68)",
           "stroke-dasharray": "6 4",
           "stroke-width": 1.2,
         });
@@ -840,7 +972,52 @@ DASHBOARD_HTML = """
       if (deltaSeconds >= 0) {
         return `dans ${deltaSeconds} s`;
       }
-      return `en attente depuis ${Math.abs(deltaSeconds)} s`;
+      return `à rafraîchir depuis ${Math.abs(deltaSeconds)} s`;
+    }
+
+    async function postJson(url, payload) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload || {}),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `Erreur ${response.status}`);
+      }
+      return data;
+    }
+
+    function currentTeslaIntervalSeconds(status) {
+      return status?.tesla?.status_refresh_seconds || teslaRefreshSeconds;
+    }
+
+    function currentLoopIntervalSeconds(status) {
+      return status?.loop?.poll_interval_seconds || refreshMs / 1000;
+    }
+
+    async function applyCadenceChange() {
+      if (!loopIntervalSelect || !teslaIntervalSelect) return;
+      const loopInterval = parseInt(loopIntervalSelect.value, 10);
+      const teslaInterval = parseInt(teslaIntervalSelect.value, 10);
+      const payload = {
+        poll_interval_seconds: Number.isFinite(loopInterval) ? loopInterval : null,
+        tesla_status_interval_seconds: Number.isFinite(teslaInterval) ? teslaInterval : null,
+      };
+      const result = await postJson("/settings/cadences", payload);
+      loopIntervalSelect.dataset.current = String(result.poll_interval_seconds);
+      teslaIntervalSelect.dataset.current = String(result.tesla_status_interval_seconds);
+      await refresh();
+    }
+
+    async function triggerManualRefresh(kind) {
+      const endpoint = kind === "tesla"
+        ? "/actions/refresh/tesla"
+        : "/actions/refresh/loop";
+      await postJson(endpoint, {});
+      await refresh();
     }
 
     function updateLiveTimers() {
@@ -851,10 +1028,13 @@ DASHBOARD_HTML = """
       const tesla = status.tesla?.snapshot || {};
       const loop = status.loop || {};
       const nowMs = Date.now();
-      const loopTarget = loop.last_run_at && loop.current_interval_seconds
-        ? isoToMs(loop.last_run_at) + (loop.current_interval_seconds * 1000)
+      const loopInterval = loop.current_interval_seconds || loop.poll_interval_seconds || refreshMs / 1000;
+      const teslaInterval = currentTeslaIntervalSeconds(status);
+      const loopReference = loop.last_success_at || loop.last_run_at;
+      const loopTarget = loopReference && loopInterval
+        ? isoToMs(loopReference) + (loopInterval * 1000)
         : null;
-      const teslaTarget = tesla.captured_at ? isoToMs(tesla.captured_at) + (teslaRefreshSeconds * 1000) : null;
+      const teslaTarget = tesla.captured_at ? isoToMs(tesla.captured_at) + (teslaInterval * 1000) : null;
       const teslaAge = relativeSeconds(nowMs, tesla.captured_at);
       const solarAge = relativeSeconds(nowMs, solar.captured_at);
       const alignmentGap = solar.captured_at && tesla.captured_at
@@ -866,6 +1046,15 @@ DASHBOARD_HTML = """
       setText("solar-age", fmtDuration(solarAge), solarAge !== null && solarAge > 45 ? "state-warn" : "state-ok");
       setText("tesla-age", fmtDuration(teslaAge), teslaAge !== null && teslaAge > 75 ? "state-warn" : "state-ok");
       setText("alignment-gap", fmtDuration(alignmentGap), alignmentGap !== null && alignmentGap > 20 ? "state-warn" : "state-ok");
+
+      const elapsed = Math.max(0, (nowMs - pageState.lastRefreshAt) / 1000);
+      const orb = document.getElementById("refresh-orb");
+      if (orb) {
+        const progress = Math.min(1, elapsed / (refreshMs / 1000));
+        const angle = Math.max(0, Math.min(360, progress * 360));
+        orb.style.background = `conic-gradient(var(--accent) 0deg ${angle}deg, rgba(0, 122, 90, 0.12) ${angle}deg 360deg)`;
+        orb.style.boxShadow = `0 0 0 1px rgba(255, 253, 248, 0.95) inset, 0 0 0 ${Math.round(progress * 4)}px rgba(0, 122, 90, ${0.08 * (1 - progress)})`;
+      }
     }
 
     async function refresh() {
@@ -878,10 +1067,13 @@ DASHBOARD_HTML = """
         const timeline = await timelineResponse.json();
         dashboardState.status = data;
         dashboardState.timeline = timeline;
+        pageState.lastRefreshAt = Date.now();
 
         const solar = data.solar.snapshot || {};
         const tesla = data.tesla.snapshot || {};
         const loop = data.loop || {};
+        const teslaIntervalSeconds = currentTeslaIntervalSeconds(data);
+        const loopIntervalSeconds = currentLoopIntervalSeconds(data);
         const samples = Array.isArray(timeline.samples) ? timeline.samples : [];
         const powerWindow = effectiveWindowSeconds("power");
         const gridWindow = effectiveWindowSeconds("grid");
@@ -904,10 +1096,19 @@ DASHBOARD_HTML = """
         setText("decision", loop.last_reason || "--");
         setText("updated-at", fmtDate(loop.last_run_at));
         setText("last-commanded-at", fmtDate(data.tesla.last_commanded_at));
+        setText("last-commanded-amps", fmtAmps(data.tesla.last_commanded_amps));
         setText("vehicle-name", tesla.vehicle_name || "--");
         setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
         setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
         setText("schedule-mode", loop.schedule_mode || "--");
+        setText("loop-period", `${loopIntervalSeconds} s`);
+        setText("tesla-period", `${teslaIntervalSeconds} s`);
+        if (loopIntervalSelect) {
+          loopIntervalSelect.value = String(loopIntervalSeconds);
+        }
+        if (teslaIntervalSelect) {
+          teslaIntervalSelect.value = String(teslaIntervalSeconds);
+        }
         updateLiveTimers();
 
         const error = loop.last_error || data.solar.last_error || data.tesla.last_error || "Aucune";
@@ -926,9 +1127,10 @@ DASHBOARD_HTML = """
             },
           ],
           zeroBaseline: true,
+          zeroLineColor: "rgba(44, 90, 160, 0.72)",
           formatLabel: (value) => `${Math.round(value)} W`,
           formatTime: fmtTime,
-          tooltip: "Courbe de la production solaire et de la consommation maison sur la fenêtre choisie.",
+          tooltip: "Courbe de la production solaire et de la consommation maison. Si Maison passe au-dessus de Production, la maison consomme plus qu'elle ne produit.",
         });
 
         renderLineChart(gridChartId, chooseSamples(samples, gridWindow), {
@@ -939,12 +1141,13 @@ DASHBOARD_HTML = """
             },
           ],
           symmetricAroundZero: true,
+          zeroLineColor: "rgba(44, 90, 160, 0.72)",
           formatLabel: (value) => {
             const rounded = Math.round(value);
             return `${rounded > 0 ? "+" : ""}${rounded} W`;
           },
           formatTime: fmtTime,
-          tooltip: "Courbe du réseau: export négatif, import positif. Le zéro correspond à l'équilibre local.",
+          tooltip: "Courbe de l'import du réseau: export négatif, import positif. La ligne bleue du zéro correspond à l'équilibre local.",
         });
 
         renderLineChart(ampsChartId, chooseSamples(samples, ampsWindow), {
@@ -962,7 +1165,7 @@ DASHBOARD_HTML = """
           yFloor: 0,
           formatLabel: (value) => `${Math.round(value)} A`,
           formatTime: fmtTime,
-          tooltip: "Courbe de l'intensité Tesla réelle et de la consigne calculée.",
+          tooltip: "Courbe de la consigne calculée et de l'intensité réelle. Si la consigne est au-dessus de l'intensité, la voiture n'a pas encore rattrapé la demande.",
         });
       } catch (error) {
         setText("error", error.message || "Erreur inconnue", "state-error");
@@ -977,6 +1180,40 @@ DASHBOARD_HTML = """
       if (dashboardState.status && dashboardState.timeline) {
         refresh();
       }
+    });
+    if (loopIntervalSelect) {
+      loopIntervalSelect.addEventListener("change", async () => {
+        try {
+          await applyCadenceChange();
+        } catch (error) {
+          setText("error", error.message || "Erreur inconnue", "state-error");
+        }
+      });
+    }
+    if (teslaIntervalSelect) {
+      teslaIntervalSelect.addEventListener("change", async () => {
+        try {
+          await applyCadenceChange();
+        } catch (error) {
+          setText("error", error.message || "Erreur inconnue", "state-error");
+        }
+      });
+    }
+    document.querySelectorAll("[data-refresh-action]").forEach((button) => {
+      const action = button.getAttribute("data-refresh-action");
+      if (!action) return;
+      button.addEventListener("click", async () => {
+        try {
+          button.disabled = true;
+          button.classList.add("state-warn");
+          await triggerManualRefresh(action);
+        } catch (error) {
+          setText("error", error.message || "Erreur inconnue", "state-error");
+        } finally {
+          button.disabled = false;
+          button.classList.remove("state-warn");
+        }
+      });
     });
     document.querySelectorAll("[data-zoom]").forEach((button) => {
       const chartName = button.getAttribute("data-zoom");
@@ -1040,6 +1277,50 @@ def create_app(
         payload = control_loop.get_history_payload()
         payload["server_time"] = datetime.utcnow().isoformat() + "Z"
         return jsonify(payload)
+
+    @app.post("/settings/cadences")
+    def update_cadences() -> Any:
+        payload = request.get_json(silent=True) or request.form.to_dict() or {}
+        poll_interval_seconds = payload.get("poll_interval_seconds")
+        tesla_status_interval_seconds = payload.get("tesla_status_interval_seconds")
+        try:
+            result = control_loop.update_runtime_intervals(
+                active_poll_interval_seconds=(
+                    int(poll_interval_seconds)
+                    if poll_interval_seconds not in {None, ""}
+                    else None
+                ),
+                tesla_status_interval_seconds=(
+                    int(tesla_status_interval_seconds)
+                    if tesla_status_interval_seconds not in {None, ""}
+                    else None
+                ),
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify(result)
+
+    @app.post("/actions/refresh/loop")
+    def refresh_loop_now() -> Any:
+        try:
+            payload = control_loop.refresh_now()
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 502
+        payload["server_time"] = datetime.utcnow().isoformat() + "Z"
+        return jsonify(payload)
+
+    @app.post("/actions/refresh/tesla")
+    def refresh_tesla_now() -> Any:
+        try:
+            snapshot = tesla_controller.read_status(force_refresh=True)
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 502
+        return jsonify(
+            {
+                "server_time": datetime.utcnow().isoformat() + "Z",
+                "tesla": snapshot.to_dict(),
+            }
+        )
 
     @app.post("/tesla/amps")
     def set_tesla_amps() -> Any:
