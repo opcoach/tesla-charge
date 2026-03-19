@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections import deque
 import math
 from dataclasses import asdict, dataclass
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timezone, timedelta
 import logging
 import threading
 from typing import Any
@@ -46,6 +47,36 @@ class LoopStatus:
         return asdict(self)
 
 
+@dataclass(slots=True)
+class TimelineSample:
+    recorded_at: datetime
+    schedule_mode: str
+    solar_captured_at: str | None
+    tesla_captured_at: str | None
+    solar_age_seconds: int | None
+    tesla_age_seconds: int | None
+    alignment_gap_seconds: int | None
+    production_watts: int | None
+    house_consumption_watts: int | None
+    grid_watts: int | None
+    export_watts: int | None
+    import_watts: int | None
+    battery_percent: int | None
+    charging_state: str | None
+    charging_amps: int | None
+    desired_amps: int | None
+    applied_amps: int | None
+    decision: str | None
+    command: str | None
+    command_result: str | None
+    error: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["recorded_at"] = self.recorded_at.isoformat()
+        return payload
+
+
 class ControlLoop:
     def __init__(
         self,
@@ -76,6 +107,7 @@ class ControlLoop:
             last_success_at=None,
             last_error=None,
         )
+        self._history: deque[TimelineSample] = deque()
         self._start_candidate_since: datetime | None = None
         self._stop_candidate_since: datetime | None = None
 
@@ -112,6 +144,14 @@ class ControlLoop:
             "tesla": self.tesla_controller.get_status_payload(),
         }
 
+    def get_history_payload(self) -> dict[str, Any]:
+        with self._lock:
+            samples = [sample.to_dict() for sample in self._history]
+        return {
+            "window_seconds": self.config.history_window_seconds,
+            "samples": samples,
+        }
+
     def _run(self) -> None:
         with self._lock:
             self._status.running = True
@@ -119,13 +159,18 @@ class ControlLoop:
         while not self._stop_event.is_set():
             started_at = self._now()
             schedule_mode, wait_seconds = self._get_schedule_mode()
+            solar_snapshot: SolarSnapshot | None = None
+            tesla_snapshot: TeslaSnapshot | None = None
+            desired_amps: int | None = None
+            decision: dict[str, Any] | None = None
+            error_message: str | None = None
             try:
                 if schedule_mode == "idle_night":
                     with self._lock:
                         self._status.running = True
                         self._status.current_interval_seconds = wait_seconds
                         self._status.schedule_mode = schedule_mode
-                        self._status.last_run_at = started_at
+                        self._status.last_run_at = started_at.isoformat()
                         self._status.last_reason = "idle_night"
                         self._status.last_error = None
                     LOGGER.debug("Boucle en veille horaire")
@@ -144,8 +189,8 @@ class ControlLoop:
                     self._status.desired_amps = desired_amps
                     self._status.applied_amps = decision["applied_amps"]
                     self._status.last_reason = decision["reason"]
-                    self._status.last_run_at = started_at
-                    self._status.last_success_at = started_at
+                    self._status.last_run_at = started_at.isoformat()
+                    self._status.last_success_at = started_at.isoformat()
                     self._status.last_error = None
 
                 LOGGER.info(
@@ -155,14 +200,25 @@ class ControlLoop:
                     decision["reason"],
                 )
             except Exception as exc:
+                error_message = str(exc)
                 with self._lock:
                     self._status.running = True
                     self._status.current_interval_seconds = wait_seconds
                     self._status.schedule_mode = schedule_mode
-                    self._status.last_run_at = started_at
-                    self._status.last_error = str(exc)
+                    self._status.last_run_at = started_at.isoformat()
+                    self._status.last_error = error_message
                     self._status.last_reason = "error"
                 LOGGER.exception("Erreur dans la boucle de contrôle")
+            finally:
+                self._record_history_sample(
+                    recorded_at=started_at,
+                    schedule_mode=schedule_mode,
+                    solar_snapshot=solar_snapshot,
+                    tesla_snapshot=tesla_snapshot,
+                    desired_amps=desired_amps,
+                    decision=decision,
+                    error_message=error_message,
+                )
 
             self._stop_event.wait(wait_seconds)
 
@@ -177,6 +233,8 @@ class ControlLoop:
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "vehicle_not_plugged",
+                "command": None,
+                "command_result": None,
             }
 
         if tesla_snapshot.vehicle_state != "online":
@@ -185,6 +243,8 @@ class ControlLoop:
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "vehicle_not_online",
+                "command": None,
+                "command_result": None,
             }
 
         now = datetime.now(timezone.utc)
@@ -203,6 +263,8 @@ class ControlLoop:
                     return {
                         "applied_amps": tesla_snapshot.charging_amps,
                         "reason": "stop_pending",
+                        "command": None,
+                        "command_result": None,
                     }
                 self._stop_candidate_since = None
                 try:
@@ -211,10 +273,14 @@ class ControlLoop:
                     return {
                         "applied_amps": tesla_snapshot.charging_amps,
                         "reason": "proxy_unavailable",
+                        "command": None,
+                        "command_result": None,
                     }
                 return {
                     "applied_amps": 0,
                     "reason": result.get("reason", "stopped"),
+                    "command": "stop",
+                    "command_result": result.get("reason", "stopped"),
                 }
 
             self._stop_candidate_since = None
@@ -222,6 +288,8 @@ class ControlLoop:
                 return {
                     "applied_amps": desired_amps,
                     "reason": "unchanged",
+                    "command": None,
+                    "command_result": None,
                 }
 
             try:
@@ -233,10 +301,14 @@ class ControlLoop:
                 return {
                     "applied_amps": tesla_snapshot.charging_amps,
                     "reason": "proxy_unavailable",
+                    "command": None,
+                    "command_result": None,
                 }
             return {
                 "applied_amps": result.get("requested_amps"),
                 "reason": result.get("reason", "updated"),
+                "command": "set",
+                "command_result": result.get("reason", "updated"),
             }
 
         self._stop_candidate_since = None
@@ -245,6 +317,8 @@ class ControlLoop:
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "waiting_for_surplus",
+                "command": None,
+                "command_result": None,
             }
 
         if self._start_candidate_since is None:
@@ -257,6 +331,8 @@ class ControlLoop:
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "start_pending",
+                "command": None,
+                "command_result": None,
             }
 
         self._start_candidate_since = None
@@ -264,20 +340,26 @@ class ControlLoop:
             start_result = self.tesla_controller.start_charging(source="control_loop")
             desired_after_start = desired_amps
             set_result = start_result
+            command_label = "start"
             if desired_amps >= self.config.min_amps:
                 set_result = self.tesla_controller.set_charging_amps(
                     desired_amps,
                     source="control_loop",
                 )
                 desired_after_start = set_result.get("requested_amps", desired_amps)
+                command_label = "start+set"
         except TeslaProxyUnavailableError:
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "proxy_unavailable",
+                "command": None,
+                "command_result": None,
             }
         return {
             "applied_amps": desired_after_start,
             "reason": set_result.get("reason", "started"),
+            "command": command_label,
+            "command_result": set_result.get("reason", "started"),
         }
 
     @staticmethod
@@ -294,6 +376,81 @@ class ControlLoop:
         delta_amps = math.floor(net_watts / self.config.nominal_voltage)
         raw_amps = current_amps + delta_amps
         return max(0, min(self.config.max_amps, raw_amps))
+
+    def _record_history_sample(
+        self,
+        *,
+        recorded_at: datetime,
+        schedule_mode: str,
+        solar_snapshot: SolarSnapshot | None,
+        tesla_snapshot: TeslaSnapshot | None,
+        desired_amps: int | None,
+        decision: dict[str, Any] | None,
+        error_message: str | None,
+    ) -> None:
+        solar_age_seconds = self._age_seconds(recorded_at, solar_snapshot.captured_at) if solar_snapshot else None
+        tesla_age_seconds = self._age_seconds(recorded_at, tesla_snapshot.captured_at) if tesla_snapshot else None
+        alignment_gap_seconds = None
+        if solar_age_seconds is not None and tesla_age_seconds is not None:
+            alignment_gap_seconds = abs(solar_age_seconds - tesla_age_seconds)
+
+        sample = TimelineSample(
+            recorded_at=recorded_at,
+            schedule_mode=schedule_mode,
+            solar_captured_at=solar_snapshot.captured_at if solar_snapshot else None,
+            tesla_captured_at=tesla_snapshot.captured_at if tesla_snapshot else None,
+            solar_age_seconds=solar_age_seconds,
+            tesla_age_seconds=tesla_age_seconds,
+            alignment_gap_seconds=alignment_gap_seconds,
+            production_watts=solar_snapshot.production_watts if solar_snapshot else None,
+            house_consumption_watts=solar_snapshot.house_consumption_watts if solar_snapshot else None,
+            grid_watts=solar_snapshot.grid_watts if solar_snapshot else None,
+            export_watts=solar_snapshot.export_watts if solar_snapshot else None,
+            import_watts=solar_snapshot.import_watts if solar_snapshot else None,
+            battery_percent=tesla_snapshot.battery_percent if tesla_snapshot else None,
+            charging_state=tesla_snapshot.charging_state if tesla_snapshot else None,
+            charging_amps=tesla_snapshot.charging_amps if tesla_snapshot else None,
+            desired_amps=desired_amps,
+            applied_amps=self._extract_applied_amps(decision, tesla_snapshot),
+            decision=decision.get("reason") if decision else ("error" if error_message else None),
+            command=decision.get("command") if decision else None,
+            command_result=decision.get("command_result") if decision else None,
+            error=error_message,
+        )
+
+        with self._lock:
+            self._history.append(sample)
+            self._trim_history_locked(recorded_at)
+
+    def _trim_history_locked(self, now: datetime) -> None:
+        cutoff = now - timedelta(seconds=self.config.history_window_seconds)
+        while self._history and self._history[0].recorded_at < cutoff:
+            self._history.popleft()
+
+    @staticmethod
+    def _extract_applied_amps(
+        decision: dict[str, Any] | None,
+        tesla_snapshot: TeslaSnapshot | None,
+    ) -> int | None:
+        if decision and decision.get("applied_amps") is not None:
+            try:
+                return int(decision["applied_amps"])
+            except (TypeError, ValueError):
+                return None
+        if tesla_snapshot is None:
+            return None
+        return tesla_snapshot.charging_amps
+
+    @staticmethod
+    def _age_seconds(reference: datetime, captured_at: str) -> int | None:
+        try:
+            parsed = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        delta = reference - parsed.astimezone(timezone.utc)
+        return max(0, int(delta.total_seconds()))
 
     def _get_schedule_mode(self) -> tuple[str, int]:
         current_local_time = datetime.now(self._timezone).time()
@@ -324,5 +481,5 @@ class ControlLoop:
         return time(hour=int(hour_str), minute=int(minute_str))
 
     @staticmethod
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+    def _now() -> datetime:
+        return datetime.now(timezone.utc)

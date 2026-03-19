@@ -65,7 +65,7 @@ Le service :
 - borne la consigne entre `6 A` et `32 A` ;
 - n’envoie pas de commande si l’ampérage ne change pas ;
 - expose une API REST ;
-- affiche une page web locale de résumé.
+- affiche une page web locale de résumé avec un historique roulant, deux graphes, des indicateurs d’âge des mesures et une fenêtre de courbe sélectionnable côté navigateur.
 
 La boucle solaire tourne toutes les `5` secondes par défaut.
 La lecture Tesla est mise en cache `30` secondes par défaut pour éviter de solliciter inutilement le véhicule.
@@ -95,6 +95,7 @@ La boucle passe en veille hors plage de jour, avec un réveil plus rare toutes l
 - `TESLA_CHARGE_STOP_AMPS` : défaut `5`
 - `TESLA_CHARGE_START_CONFIRM_SEC` : défaut `60`
 - `TESLA_CHARGE_STOP_CONFIRM_SEC` : défaut `90`
+- `TIMELINE_WINDOW_SEC` : défaut `3600`
 - `DAY_ACTIVE_START` : défaut `07:00`
 - `DAY_ACTIVE_END` : défaut `22:00`
 - `TESLA_MIN_AMPS` : défaut `6`
@@ -191,6 +192,12 @@ Vérifier l’application web :
 curl http://127.0.0.1:8080/status
 ```
 
+Vérifier l’historique de régulation :
+
+```bash
+curl http://127.0.0.1:8080/timeline
+```
+
 Vérifier le proxy local Tesla :
 
 ```bash
@@ -245,6 +252,7 @@ sudo systemctl status tesla-command-proxy --no-pager
 - `GET /solar`
 - `GET /tesla`
 - `GET /status`
+- `GET /timeline`
 - `POST /tesla/amps`
 
 Exemple :

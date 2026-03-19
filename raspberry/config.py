@@ -45,6 +45,7 @@ class AppConfig:
     charge_stop_amps: int
     charge_start_confirm_seconds: int
     charge_stop_confirm_seconds: int
+    history_window_seconds: int
     day_active_start: str
     day_active_end: str
     api_host: str
@@ -105,6 +106,7 @@ class AppConfig:
         charge_stop_amps = max(0, min(charge_start_amps - 1, _get_int("TESLA_CHARGE_STOP_AMPS", 5)))
         charge_start_confirm_seconds = max(1, _get_int("TESLA_CHARGE_START_CONFIRM_SEC", 60))
         charge_stop_confirm_seconds = max(1, _get_int("TESLA_CHARGE_STOP_CONFIRM_SEC", 90))
+        history_window_seconds = max(60, _get_int("TIMELINE_WINDOW_SEC", 3600))
 
         return cls(
             envoy_url=os.getenv(
@@ -138,6 +140,7 @@ class AppConfig:
             charge_stop_amps=charge_stop_amps,
             charge_start_confirm_seconds=charge_start_confirm_seconds,
             charge_stop_confirm_seconds=charge_stop_confirm_seconds,
+            history_window_seconds=history_window_seconds,
             day_active_start=os.getenv("DAY_ACTIVE_START", "07:00").strip() or "07:00",
             day_active_end=os.getenv("DAY_ACTIVE_END", "22:00").strip() or "22:00",
             api_host=os.getenv("APP_HOST", "0.0.0.0"),

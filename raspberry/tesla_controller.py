@@ -66,6 +66,7 @@ class TeslaController:
         self._last_snapshot_at: datetime | None = None
         self._last_error: str | None = None
         self._last_commanded_amps: int | None = None
+        self._last_commanded_at: datetime | None = None
         self._last_logged_error: str | None = None
         self._last_logged_error_at: datetime | None = None
         self._proxy_unavailable_until: datetime | None = None
@@ -134,6 +135,7 @@ class TeslaController:
                     )
 
                 self._last_commanded_amps = clamped_amps
+                self._last_commanded_at = datetime.now(timezone.utc)
                 merged.setdefault("charge_state", {})["charge_current_request"] = clamped_amps
                 snapshot_after = self._snapshot_from_vehicle(merged)
                 self._vehicle = merged
@@ -193,6 +195,7 @@ class TeslaController:
                     )
 
                 self._last_commanded_amps = snapshot_before.charging_amps or self.config.min_amps
+                self._last_commanded_at = datetime.now(timezone.utc)
                 self._last_error = None
 
             LOGGER.info("Commande %s envoyée: démarrage de la charge", source)
@@ -240,6 +243,7 @@ class TeslaController:
                     )
 
                 self._last_commanded_amps = 0
+                self._last_commanded_at = datetime.now(timezone.utc)
                 self._last_error = None
 
             LOGGER.info("Commande %s envoyée: arrêt de la charge", source)
@@ -259,11 +263,13 @@ class TeslaController:
             snapshot = self._last_snapshot.to_dict() if self._last_snapshot else None
             error = self._last_error
             last_commanded_amps = self._last_commanded_amps
+            last_commanded_at = self._last_commanded_at.isoformat() if self._last_commanded_at else None
         return {
             "available": snapshot is not None,
             "snapshot": snapshot,
             "last_error": error,
             "last_commanded_amps": last_commanded_amps,
+            "last_commanded_at": last_commanded_at,
         }
 
     def close(self) -> None:
