@@ -123,6 +123,9 @@ DASHBOARD_HTML = """
       padding: 4px 8px;
       outline: none;
     }
+    .cadence-select.is-default {
+      font-weight: 700;
+    }
     .pill-action {
       border: 1px solid var(--line);
       background: rgba(255, 253, 248, 0.95);
@@ -342,6 +345,13 @@ DASHBOARD_HTML = """
       main {
         padding: 18px 12px 28px;
       }
+      .timing {
+        gap: 8px;
+      }
+      .timing .pill {
+        width: 100%;
+        justify-content: space-between;
+      }
       .summary-row {
         grid-template-columns: 1fr;
       }
@@ -351,8 +361,37 @@ DASHBOARD_HTML = """
       .chart-row {
         grid-template-columns: 1fr;
       }
+      .chart-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .chart-head-actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+      .chart-title {
+        font-size: 0.84rem;
+      }
+      .chart-subtitle {
+        font-size: 0.68rem;
+      }
+      .chart-svg {
+        height: 180px;
+      }
+      .chart-legend {
+        gap: 8px;
+        font-size: 0.72rem;
+      }
       .card {
         border-radius: 14px;
+        padding: 12px;
+      }
+      .label {
+        font-size: 0.69rem;
+      }
+      .value {
+        font-size: clamp(0.96rem, 4vw, 1.18rem);
       }
     }
   </style>
@@ -371,50 +410,18 @@ DASHBOARD_HTML = """
     <div class="timing">
       <div class="pill">
         <span>Régulation</span>
-        <strong class="pill-strong" id="loop-period">{{ loop_interval_seconds }} s</strong>
-        <select id="loop-interval-select" class="cadence-select" data-current="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
+        <select id="loop-interval-select" class="cadence-select is-default" data-current="{{ loop_interval_seconds }}" data-default="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
         <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture et une régulation maintenant">↻</button>
         <span class="pill-hint">dans <span id="loop-countdown">--</span></span>
       </div>
       <div class="pill">
         <span>Tesla</span>
-        <strong class="pill-strong" id="tesla-period">{{ tesla_refresh_seconds }} s</strong>
-        <select id="tesla-interval-select" class="cadence-select" data-current="{{ tesla_refresh_seconds }}" aria-label="Changer la cadence de lecture Tesla"></select>
+        <select id="tesla-interval-select" class="cadence-select is-default" data-current="{{ tesla_refresh_seconds }}" data-default="{{ tesla_refresh_seconds }}" aria-label="Changer la cadence de lecture Tesla"></select>
         <button class="pill-action" type="button" data-refresh-action="tesla" title="Forcer une lecture Tesla maintenant">↻</button>
         <span class="pill-hint">dans <span id="tesla-countdown">--</span></span>
       </div>
       <div class="pill">Mode : <span id="schedule-mode">--</span></div>
     </div>
-
-    <section class="sync-row">
-      <article class="card">
-        <div class="card-top">
-          <div class="card-title">
-            <div class="label">Âge de la mesure solaire</div>
-          </div>
-          <span class="info-icon" title="Temps écoulé depuis la dernière mesure Envoy utilisée par le dashboard.">i</span>
-        </div>
-        <div class="value" id="solar-age">--</div>
-      </article>
-      <article class="card">
-        <div class="card-top">
-          <div class="card-title">
-            <div class="label">Âge de la mesure Tesla</div>
-          </div>
-          <span class="info-icon" title="Temps écoulé depuis la dernière lecture Tesla utilisée par le dashboard.">i</span>
-        </div>
-        <div class="value" id="tesla-age">--</div>
-      </article>
-      <article class="card">
-        <div class="card-top">
-          <div class="card-title">
-            <div class="label">Décalage des mesures</div>
-          </div>
-          <span class="info-icon" title="Différence d'horodatage entre la dernière mesure solaire et la dernière mesure Tesla. Plus l'écart est grand, plus les chiffres peuvent sembler décalés.">i</span>
-        </div>
-        <div class="value" id="alignment-gap">--</div>
-      </article>
-    </section>
 
     <section class="summary-row">
       <article class="card">
@@ -492,7 +499,7 @@ DASHBOARD_HTML = """
         <div class="chart-head">
           <div>
             <div class="chart-title">
-              Puissance
+              Puissance produite et consommée
             </div>
             <div class="chart-subtitle">Si Maison est au-dessus de Production, la maison consomme plus qu'elle ne produit.</div>
           </div>
@@ -523,7 +530,8 @@ DASHBOARD_HTML = """
         </div>
         <svg id="grid-chart" class="chart-svg" viewBox="0 0 960 240" role="img" aria-label="Courbe du réseau"></svg>
         <div class="chart-legend">
-          <span class="legend-item"><span class="legend-line" style="background: var(--danger);"></span>Réseau</span>
+          <span class="legend-item"><span class="legend-line" style="background: var(--danger);"></span>Import > 0</span>
+          <span class="legend-item"><span class="legend-line" style="background: var(--accent);"></span>Export < 0</span>
         </div>
       </article>
 
@@ -531,7 +539,7 @@ DASHBOARD_HTML = """
         <div class="chart-head">
           <div>
             <div class="chart-title">
-              Tesla
+              Intensité importée dans la Tesla
             </div>
             <div class="chart-subtitle">La consigne est ce qu'on demande, l'intensité est ce que la voiture applique réellement.</div>
           </div>
@@ -614,6 +622,7 @@ DASHBOARD_HTML = """
     function populateCadenceSelect(select) {
       if (!select) return;
       const current = parseInt(select.dataset.current || "", 10);
+      const defaultValue = parseInt(select.dataset.default || "", 10);
       select.innerHTML = "";
       cadenceOptions.forEach((value) => {
         const option = document.createElement("option");
@@ -624,6 +633,14 @@ DASHBOARD_HTML = """
         }
         select.appendChild(option);
       });
+      select.classList.toggle("is-default", Number.isFinite(current) && current === defaultValue);
+    }
+
+    function syncCadenceSelectClass(select) {
+      if (!select) return;
+      const defaultValue = parseInt(select.dataset.default || "", 10);
+      const current = parseInt(select.value, 10);
+      select.classList.toggle("is-default", Number.isFinite(current) && current === defaultValue);
     }
 
     populateCadenceSelect(loopIntervalSelect);
@@ -663,30 +680,6 @@ DASHBOARD_HTML = """
       }).format(date);
     }
 
-    function fmtDuration(seconds) {
-      if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return "--";
-      const value = Math.max(0, Math.round(seconds));
-      if (value < 60) return `${value} s`;
-      const minutes = Math.floor(value / 60);
-      const remainder = value % 60;
-      if (minutes < 60) return `${minutes} min ${String(remainder).padStart(2, "0")} s`;
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return `${hours} h ${String(mins).padStart(2, "0")} min`;
-    }
-
-    function fmtCountdownSeconds(seconds) {
-      if (seconds === null || seconds === undefined || Number.isNaN(seconds)) return "--";
-      const value = Math.max(0, Math.round(seconds));
-      if (value < 60) return `${value} s`;
-      const minutes = Math.floor(value / 60);
-      const remainder = value % 60;
-      if (minutes < 60) return `${minutes} min ${String(remainder).padStart(2, "0")} s`;
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return `${hours} h ${String(mins).padStart(2, "0")} min`;
-    }
-
     function setText(id, value, className) {
       const node = document.getElementById(id);
       if (!node.dataset.baseClass) {
@@ -701,12 +694,6 @@ DASHBOARD_HTML = """
       const date = new Date(value);
       if (Number.isNaN(date.getTime())) return null;
       return date.getTime();
-    }
-
-    function relativeSeconds(baseMs, value) {
-      const ts = isoToMs(value);
-      if (baseMs === null || ts === null) return null;
-      return Math.max(0, (baseMs - ts) / 1000);
     }
 
     function updateRefreshOrb() {
@@ -858,7 +845,7 @@ DASHBOARD_HTML = """
         svg.appendChild(grid);
       }
 
-      if (options.zeroBaseline && minY < 0 && maxY > 0) {
+      if (options.zeroBaseline && minY <= 0 && maxY >= 0) {
         const zeroY = yScale(0);
         const zeroLine = makeSvgEl("line", {
           x1: pad.left,
@@ -906,21 +893,34 @@ DASHBOARD_HTML = """
       svg.appendChild(bottomRight);
 
       for (const series of options.series) {
-        const polyline = makeSvgEl("polyline", {
-          fill: "none",
-          stroke: series.color,
-          "stroke-width": 2.8,
-          "stroke-linejoin": "round",
-          "stroke-linecap": "round",
-        });
-        const parts = [];
+        const drawSegment = (parts) => {
+          if (parts.length < 2) return;
+          const polyline = makeSvgEl("polyline", {
+            fill: "none",
+            stroke: series.color,
+            "stroke-width": 2.8,
+            "stroke-linejoin": "round",
+            "stroke-linecap": "round",
+          });
+          polyline.setAttribute("points", parts.join(" "));
+          svg.appendChild(polyline);
+        };
+        let parts = [];
         for (const point of points) {
           const value = series.value(point.sample);
-          if (value === null || value === undefined || Number.isNaN(value)) continue;
+          if (value === null || value === undefined || Number.isNaN(value)) {
+            drawSegment(parts);
+            parts = [];
+            continue;
+          }
+          if (series.filter && !series.filter(value)) {
+            drawSegment(parts);
+            parts = [];
+            continue;
+          }
           parts.push(`${xScale(point.t).toFixed(1)},${yScale(value).toFixed(1)}`);
         }
-        polyline.setAttribute("points", parts.join(" "));
-        svg.appendChild(polyline);
+        drawSegment(parts);
       }
 
       const markers = points.filter((point) => point.sample.command || point.sample.decision === "started" || point.sample.decision === "stopped");
@@ -1009,6 +1009,8 @@ DASHBOARD_HTML = """
       const result = await postJson("/settings/cadences", payload);
       loopIntervalSelect.dataset.current = String(result.poll_interval_seconds);
       teslaIntervalSelect.dataset.current = String(result.tesla_status_interval_seconds);
+      syncCadenceSelectClass(loopIntervalSelect);
+      syncCadenceSelectClass(teslaIntervalSelect);
       await refresh();
     }
 
@@ -1035,17 +1037,9 @@ DASHBOARD_HTML = """
         ? isoToMs(loopReference) + (loopInterval * 1000)
         : null;
       const teslaTarget = tesla.captured_at ? isoToMs(tesla.captured_at) + (teslaInterval * 1000) : null;
-      const teslaAge = relativeSeconds(nowMs, tesla.captured_at);
-      const solarAge = relativeSeconds(nowMs, solar.captured_at);
-      const alignmentGap = solar.captured_at && tesla.captured_at
-        ? Math.abs((isoToMs(solar.captured_at) || 0) - (isoToMs(tesla.captured_at) || 0)) / 1000
-        : null;
 
       setText("loop-countdown", formatCountdown(loopTarget, nowMs), loopTarget !== null && loopTarget < nowMs ? "state-warn" : "state-ok");
       setText("tesla-countdown", formatCountdown(teslaTarget, nowMs), teslaTarget !== null && teslaTarget < nowMs ? "state-warn" : "state-ok");
-      setText("solar-age", fmtDuration(solarAge), solarAge !== null && solarAge > 45 ? "state-warn" : "state-ok");
-      setText("tesla-age", fmtDuration(teslaAge), teslaAge !== null && teslaAge > 75 ? "state-warn" : "state-ok");
-      setText("alignment-gap", fmtDuration(alignmentGap), alignmentGap !== null && alignmentGap > 20 ? "state-warn" : "state-ok");
 
       const elapsed = Math.max(0, (nowMs - pageState.lastRefreshAt) / 1000);
       const orb = document.getElementById("refresh-orb");
@@ -1101,13 +1095,13 @@ DASHBOARD_HTML = """
         setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
         setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
         setText("schedule-mode", loop.schedule_mode || "--");
-        setText("loop-period", `${loopIntervalSeconds} s`);
-        setText("tesla-period", `${teslaIntervalSeconds} s`);
         if (loopIntervalSelect) {
           loopIntervalSelect.value = String(loopIntervalSeconds);
+          syncCadenceSelectClass(loopIntervalSelect);
         }
         if (teslaIntervalSelect) {
           teslaIntervalSelect.value = String(teslaIntervalSeconds);
+          syncCadenceSelectClass(teslaIntervalSelect);
         }
         updateLiveTimers();
 
@@ -1138,6 +1132,12 @@ DASHBOARD_HTML = """
             {
               color: "var(--danger)",
               value: (sample) => sample.grid_watts,
+              filter: (value) => value > 0,
+            },
+            {
+              color: "var(--accent)",
+              value: (sample) => sample.grid_watts,
+              filter: (value) => value < 0,
             },
           ],
           symmetricAroundZero: true,
