@@ -260,6 +260,42 @@ L’application Python ne doit pas démarrer elle-même le proxy local. Le proxy
 
 Le proxy local Tesla officiel est `tesla-http-proxy`. Il écoute en HTTPS, pas en HTTP.
 
+### Raccourcis utiles
+
+Pour simplifier les mises à jour sur la Raspberry, tu peux ajouter ces fonctions dans `~/.bashrc` ou `~/.bash_profile` :
+
+```bash
+tesla-status() {
+  sudo systemctl status tesla-command-proxy --no-pager
+  sudo systemctl status tesla-charge --no-pager
+}
+
+tesla-restart() {
+  sudo systemctl daemon-reload
+  sudo systemctl restart tesla-command-proxy
+  sudo systemctl restart tesla-charge
+  tesla-status
+}
+
+tesla-restart-proxy() {
+  sudo systemctl daemon-reload
+  sudo systemctl restart tesla-command-proxy
+  sudo systemctl status tesla-command-proxy --no-pager
+}
+
+tesla-restart-charge() {
+  sudo systemctl restart tesla-charge
+  sudo systemctl status tesla-charge --no-pager
+}
+```
+
+Pour automatiser le rappel après un `git pull`, le dépôt fournit un hook `post-merge` dans `deploy/git-hooks/post-merge`. Active-le localement avec :
+
+```bash
+chmod +x deploy/git-hooks/post-merge
+git config core.hooksPath deploy/git-hooks
+```
+
 ### Clés et certificats du proxy
 
 Le proxy local Tesla a besoin de trois fichiers :

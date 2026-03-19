@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+changed_files="$(
+  git diff --name-only ORIG_HEAD HEAD 2>/dev/null ||
+  git diff --name-only HEAD@{1} HEAD 2>/dev/null ||
+  true
+)"
+
+if [[ -z "${changed_files}" ]]; then
+  exit 0
+fi
+
+needs_daemon_reload=0
+needs_charge_restart=0
+needs_proxy_restart=0
+needs_manual_web_deploy=0
+
+mapfile -t files <<< "${changed_files}"
+for file in "${files[@]}"; do
+  [[ -z "${file}" ]] && continue
+  case "${file}" in
+    raspberry/*.py|raspberry/requirements.txt|raspberry/*.md)
+      needs_charge_restart=1
+      ;;
+    raspberry/proxy/*)
+      needs_proxy_restart=1
+      ;;
+    deploy/systemd/*.service|deploy/systemd/*.env.example)
+      needs_daemon_reload=1
+      needs_charge_restart=1
+      needs_proxy_restart=1
+      ;;
+    tesla.opcoach.com/*)
+      needs_manual_web_deploy=1
+      ;;
+    README.md|docs/*|deploy/git-hooks/*)
+      ;;
+  esac
+done
+
+echo
+echo "tesla-charge: post-merge"
+echo "Fichiers modifiés:"
+printf '  - %s\n' "${files[@]}"
+
+if (( needs_daemon_reload )); then
+  echo "À lancer:"
+  echo "  sudo systemctl daemon-reload"
+fi
+if (( needs_proxy_restart )); then
+  echo "  sudo systemctl restart tesla-command-proxy"
+fi
+if (( needs_charge_restart )); then
+  echo "  sudo systemctl restart tesla-charge"
+fi
+if (( needs_manual_web_deploy )); then
+  echo "Déploiement web à faire à part sur tesla.opcoach.com."
+fi
+if (( ! needs_daemon_reload && ! needs_proxy_restart && ! needs_charge_restart && ! needs_manual_web_deploy )); then
+  echo "Aucun redémarrage de service nécessaire."
+fi
