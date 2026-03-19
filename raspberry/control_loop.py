@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass
 from datetime import datetime, time, timezone
 import logging
@@ -131,7 +132,7 @@ class ControlLoop:
 
                 solar_snapshot = self.solar_monitor.read_snapshot()
                 tesla_snapshot = self.tesla_controller.read_status()
-                desired_amps = self._calculate_desired_amps(solar_snapshot)
+                desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
                 decision = self._apply_decision(desired_amps, tesla_snapshot)
 
                 with self._lock:
@@ -197,8 +198,11 @@ class ControlLoop:
             "reason": result.get("reason", "updated"),
         }
 
-    def _calculate_desired_amps(self, solar_snapshot: SolarSnapshot) -> int:
-        raw_amps = int(solar_snapshot.export_watts / 230)
+    def _calculate_desired_amps(self, solar_snapshot: SolarSnapshot, tesla_snapshot: TeslaSnapshot) -> int:
+        current_amps = tesla_snapshot.charging_amps or 0
+        net_watts = solar_snapshot.export_watts - solar_snapshot.import_watts
+        delta_amps = math.trunc(net_watts / self.config.nominal_voltage)
+        raw_amps = current_amps + delta_amps
         return max(self.config.min_amps, min(self.config.max_amps, raw_amps))
 
     def _get_schedule_mode(self) -> tuple[str, int]:

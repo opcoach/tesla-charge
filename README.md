@@ -60,7 +60,7 @@ Le service :
 
 - lit les données de production et de réseau via l’Envoy Enphase ;
 - calcule le surplus exporté ;
-- convertit ce surplus en intensité de charge Tesla ;
+- calcule une consigne Tesla incrémentale à partir du courant déjà demandé par la voiture et du flux réseau signé, avec la formule `current_amps + trunc((export_watts - import_watts) / tension_nominale)`, puis borne le résultat entre `TESLA_MIN_AMPS` et `TESLA_MAX_AMPS` ;
 - lit l’état du véhicule via Tesla Fleet API à partir d’un `refresh_token` ;
 - borne la consigne entre `6 A` et `32 A` ;
 - n’envoie pas de commande si l’ampérage ne change pas ;
@@ -90,6 +90,7 @@ La boucle passe en veille hors plage de jour, avec un réveil plus rare toutes l
 - `CONTROL_IDLE_INTERVAL_SEC` : défaut `900`
 - `TESLA_STATUS_INTERVAL_SEC` : défaut `30`
 - `TESLA_PROXY_RETRY_SEC` : défaut `60`
+- `TESLA_NOMINAL_VOLTAGE` : défaut `220`
 - `DAY_ACTIVE_START` : défaut `07:00`
 - `DAY_ACTIVE_END` : défaut `22:00`
 - `TESLA_MIN_AMPS` : défaut `6`
@@ -189,6 +190,27 @@ Vérifier le proxy local Tesla :
 ```bash
 ss -ltnp | grep 4443
 ```
+
+### Calcul de l’ampérage
+
+Le calcul de la consigne Tesla est volontairement incrémental pour pousser un maximum de surplus vers la voiture sans oublier le courant déjà demandé par la Tesla :
+
+```text
+ampères = courant_Tesla_actuel + trunc((export_watts - import_watts) / tension_nominale)
+```
+
+Le résultat est ensuite limité entre `TESLA_MIN_AMPS` et `TESLA_MAX_AMPS`.
+
+Exemple :
+
+- courant Tesla actuel : `8 A`
+- surplus exporté : `2068 W`
+- tension nominale utilisée : `220 V`
+- calcul brut : `2068 / 220 = 9,40`
+- `trunc(9,40)` donne `9 A`
+- consigne finale : `17 A`
+
+Avec `1733 W` de surplus et `7 A` déjà demandés par la voiture, la consigne devient `14 A` environ. Si tu veux encore plus de finesse, la prochaine étape serait d’ajouter une marge de sécurité configurable.
 
 Vérifier le service principal :
 

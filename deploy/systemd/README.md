@@ -27,6 +27,7 @@ Dans `/etc/default/tesla-charge`, remplace au minimum :
 - `ENPHASE_TOKEN`
 - `TESLA_CLIENT_ID`
 - `TESLA_VEHICLE_NAME` si tu veux cibler explicitement `Tesla opc`
+- `TESLA_NOMINAL_VOLTAGE` si tu veux ajuster le calcul de consigne
 
 Vérifie aussi le fichier `/etc/systemd/system/tesla-charge.service` si ton utilisateur Raspberry n’est pas `olivier`.
 
@@ -123,6 +124,7 @@ Dans `/etc/default/tesla-charge`, garde en général :
 ```text
 TESLA_PROXY_URL=https://localhost:4443
 TESLA_PROXY_VERIFY_SSL=false
+TESLA_NOMINAL_VOLTAGE=220
 ```
 
 Le proxy Tesla officiel écoute en HTTPS. Le mode `VERIFY_SSL=false` est acceptable ici parce que le service reste lié à `localhost`.

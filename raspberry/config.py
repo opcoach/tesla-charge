@@ -40,6 +40,7 @@ class AppConfig:
     idle_poll_interval_seconds: int
     tesla_status_interval_seconds: int
     tesla_proxy_retry_seconds: int
+    nominal_voltage: int
     day_active_start: str
     day_active_end: str
     api_host: str
@@ -89,6 +90,7 @@ class AppConfig:
             poll_interval_seconds,
             _get_int("TESLA_PROXY_RETRY_SEC", 60),
         )
+        nominal_voltage = max(100, _get_int("TESLA_NOMINAL_VOLTAGE", 220))
         min_amps = _get_int("TESLA_MIN_AMPS", 6)
         max_amps = _get_int("TESLA_MAX_AMPS", 32)
         if min_amps < 6:
@@ -123,6 +125,7 @@ class AppConfig:
             idle_poll_interval_seconds=idle_poll_interval_seconds,
             tesla_status_interval_seconds=tesla_status_interval_seconds,
             tesla_proxy_retry_seconds=tesla_proxy_retry_seconds,
+            nominal_voltage=nominal_voltage,
             day_active_start=os.getenv("DAY_ACTIVE_START", "07:00").strip() or "07:00",
             day_active_end=os.getenv("DAY_ACTIVE_END", "22:00").strip() or "22:00",
             api_host=os.getenv("APP_HOST", "0.0.0.0"),
