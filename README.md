@@ -65,7 +65,7 @@ Le service :
 - borne la consigne entre `6 A` et `32 A` ;
 - n’envoie pas de commande si l’ampérage ne change pas ;
 - expose une API REST ;
-- affiche une page web locale de résumé avec un historique roulant, deux graphes, des indicateurs d’âge des mesures et une fenêtre de courbe sélectionnable côté navigateur.
+- affiche une page web locale de résumé avec un historique roulant, trois graphes séparés, des indicateurs d’âge des mesures, un compteur de prochaine mise à jour et une fenêtre de courbe sélectionnable côté navigateur.
 
 La boucle solaire tourne toutes les `5` secondes par défaut.
 La lecture Tesla est mise en cache `30` secondes par défaut pour éviter de solliciter inutilement le véhicule.
@@ -254,6 +254,15 @@ sudo systemctl status tesla-command-proxy --no-pager
 - `GET /status`
 - `GET /timeline`
 - `POST /tesla/amps`
+
+Le tableau de bord affiche désormais :
+
+- le temps restant avant la prochaine régulation ;
+- le temps restant avant la prochaine lecture Tesla ;
+- un graphe puissance ;
+- un graphe réseau séparé ;
+- un graphe Tesla avec zoom ;
+- des tooltips explicatifs sur les cartes de graphe.
 
 Exemple :
 

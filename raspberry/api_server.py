@@ -65,8 +65,13 @@ DASHBOARD_HTML = """
       border: 1px solid var(--line);
       border-radius: 999px;
       color: var(--muted);
-      font-size: 0.9rem;
-      padding: 8px 12px;
+      font-size: 0.8rem;
+      padding: 7px 11px;
+    }
+    .pill-hint {
+      color: var(--muted);
+      font-size: 0.72rem;
+      margin-left: 6px;
     }
     .timing select {
       background: transparent;
@@ -92,18 +97,18 @@ DASHBOARD_HTML = """
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 18px;
-      padding: 18px;
+      padding: 14px;
       box-shadow: 0 12px 30px rgba(35, 32, 26, 0.06);
     }
     .label {
       color: var(--muted);
-      font-size: 0.92rem;
-      margin-bottom: 8px;
+      font-size: 0.78rem;
+      margin-bottom: 6px;
     }
     .value {
-      font-size: clamp(1.6rem, 4vw, 2.2rem);
-      font-weight: 700;
-      letter-spacing: -0.04em;
+      font-size: clamp(1.15rem, 3vw, 1.55rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
     }
     .meta-grid {
       display: grid;
@@ -114,8 +119,9 @@ DASHBOARD_HTML = """
       display: flex;
       justify-content: space-between;
       gap: 12px;
-      padding: 10px 0;
+      padding: 8px 0;
       border-top: 1px solid var(--line);
+      font-size: 0.88rem;
     }
     .meta-line:first-child {
       border-top: 0;
@@ -134,14 +140,14 @@ DASHBOARD_HTML = """
       align-items: center;
       gap: 8px;
     }
-    .chart-row {
+    .chart-stack {
       display: grid;
       gap: 14px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       margin-bottom: 24px;
     }
     .chart-card {
-      padding: 18px 18px 16px;
+      padding: 14px 14px 12px;
     }
     .chart-head {
       display: flex;
@@ -151,13 +157,13 @@ DASHBOARD_HTML = """
       margin-bottom: 10px;
     }
     .chart-title {
-      font-size: 1rem;
-      font-weight: 700;
+      font-size: 0.95rem;
+      font-weight: 600;
       color: var(--ink);
     }
     .chart-subtitle {
       color: var(--muted);
-      font-size: 0.88rem;
+      font-size: 0.78rem;
     }
     .chart-svg {
       width: 100%;
@@ -171,7 +177,7 @@ DASHBOARD_HTML = """
       gap: 12px;
       margin-top: 10px;
       color: var(--muted);
-      font-size: 0.88rem;
+      font-size: 0.78rem;
     }
     .legend-item {
       display: inline-flex;
@@ -189,6 +195,42 @@ DASHBOARD_HTML = """
       height: 3px;
       border-radius: 999px;
       display: inline-block;
+    }
+    .chart-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .zoom-button {
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.92);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .zoom-button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .chart-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      margin-left: 6px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.7rem;
+      cursor: help;
+    }
+    .chart-card[data-zoomed="true"] {
+      border-color: rgba(0, 122, 90, 0.45);
+      box-shadow: 0 16px 36px rgba(35, 32, 26, 0.08);
     }
     .state-ok { color: var(--accent); }
     .state-warn { color: var(--warn); }
@@ -225,8 +267,8 @@ DASHBOARD_HTML = """
     </div>
     <div class="timing">
       <div class="pill">Page web : toutes les {{ refresh_ms // 1000 }} s</div>
-      <div class="pill">Régulation : <span id="loop-countdown">--</span></div>
-      <div class="pill">Tesla : <span id="tesla-countdown">--</span></div>
+      <div class="pill">Régulation : <span id="loop-countdown">--</span><span class="pill-hint">/ <span id="loop-period">{{ loop_interval_seconds }} s</span></span></div>
+      <div class="pill">Tesla : <span id="tesla-countdown">--</span><span class="pill-hint">/ <span id="tesla-period">{{ tesla_refresh_seconds }} s</span></span></div>
       <div class="pill">Mode : <span id="schedule-mode">--</span></div>
     </div>
 
@@ -286,29 +328,63 @@ DASHBOARD_HTML = """
       </div>
     </div>
 
-    <section class="chart-row">
-      <article class="card chart-card">
+    <section class="chart-stack">
+      <article class="card chart-card" data-chart="power">
         <div class="chart-head">
-          <div class="chart-title">Puissance</div>
-          <div class="chart-subtitle">Production, consommation et réseau</div>
+          <div>
+            <div class="chart-title">
+              Puissance
+              <span class="chart-help" title="Montre la production solaire et la consommation maison. La courbe réseau est séparée pour éviter de confondre export et import avec le reste.">i</span>
+            </div>
+            <div class="chart-subtitle">Production et consommation de la maison</div>
+          </div>
+          <div class="chart-head-actions">
+            <button class="zoom-button" type="button" data-zoom="power" title="Zoomer sur une fenêtre plus courte">Zoom</button>
+          </div>
         </div>
-        <svg id="power-chart" class="chart-svg" viewBox="0 0 960 280" role="img" aria-label="Courbe des puissances"></svg>
+        <svg id="power-chart" class="chart-svg" viewBox="0 0 960 240" role="img" aria-label="Courbe de production et consommation"></svg>
         <div class="chart-legend">
           <span class="legend-item"><span class="legend-line" style="background: var(--accent);"></span>Production</span>
           <span class="legend-item"><span class="legend-line" style="background: var(--warn);"></span>Maison</span>
+        </div>
+      </article>
+
+      <article class="card chart-card" data-chart="grid">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">
+              Réseau
+              <span class="chart-help" title="Montre l'export et l'import réseau. Les valeurs négatives sont l'export, les valeurs positives l'import.">i</span>
+            </div>
+            <div class="chart-subtitle">Export négatif, import positif</div>
+          </div>
+          <div class="chart-head-actions">
+            <button class="zoom-button" type="button" data-zoom="grid" title="Zoomer sur une fenêtre plus courte">Zoom</button>
+          </div>
+        </div>
+        <svg id="grid-chart" class="chart-svg" viewBox="0 0 960 240" role="img" aria-label="Courbe du réseau"></svg>
+        <div class="chart-legend">
           <span class="legend-item"><span class="legend-line" style="background: var(--danger);"></span>Réseau</span>
         </div>
       </article>
-      <article class="card chart-card">
+
+      <article class="card chart-card" data-chart="amps">
         <div class="chart-head">
-          <div class="chart-title">Tesla</div>
-          <div class="chart-subtitle">Intensité réelle et cible</div>
+          <div>
+            <div class="chart-title">
+              Tesla
+              <span class="chart-help" title="Montre l'intensité réellement appliquée et la consigne calculée pour la voiture.">i</span>
+            </div>
+            <div class="chart-subtitle">Intensité réelle et consigne</div>
+          </div>
+          <div class="chart-head-actions">
+            <button class="zoom-button" type="button" data-zoom="amps" title="Zoomer sur une fenêtre plus courte">Zoom</button>
+          </div>
         </div>
-        <svg id="amps-chart" class="chart-svg" viewBox="0 0 960 280" role="img" aria-label="Courbe des intensités Tesla"></svg>
+        <svg id="amps-chart" class="chart-svg" viewBox="0 0 960 240" role="img" aria-label="Courbe des intensités Tesla"></svg>
         <div class="chart-legend">
           <span class="legend-item"><span class="legend-line" style="background: var(--accent-2);"></span>Cible</span>
           <span class="legend-item"><span class="legend-line" style="background: var(--accent);"></span>Intensité</span>
-          <span class="legend-item"><span class="legend-line" style="background: var(--warn);"></span>Commandes</span>
         </div>
       </article>
     </section>
@@ -338,11 +414,18 @@ DASHBOARD_HTML = """
     const refreshMs = {{ refresh_ms }};
     const historyWindowSeconds = {{ history_window_seconds }};
     const teslaRefreshSeconds = {{ tesla_refresh_seconds }};
+    const zoomWindowSeconds = 600;
     const powerChartId = "power-chart";
+    const gridChartId = "grid-chart";
     const ampsChartId = "amps-chart";
     const dashboardState = {
       status: null,
       timeline: { window_seconds: historyWindowSeconds, samples: [] },
+    };
+    const chartState = {
+      power: false,
+      grid: false,
+      amps: false,
     };
     const chartWindowSelect = document.getElementById("chart-window");
     const storedWindow = localStorage.getItem("tesla-charge-chart-window");
@@ -424,8 +507,7 @@ DASHBOARD_HTML = """
       return Number.isFinite(parsed) ? parsed : historyWindowSeconds;
     }
 
-    function chooseSamples(samples) {
-      const windowSeconds = currentWindowSeconds();
+    function chooseSamples(samples, windowSeconds) {
       if (!samples.length) return [];
       const maxTimestamp = samples.reduce((acc, sample) => {
         const ts = isoToMs(sample.recorded_at);
@@ -436,6 +518,14 @@ DASHBOARD_HTML = """
         const ts = isoToMs(sample.recorded_at);
         return ts !== null && ts >= cutoff;
       });
+    }
+
+    function effectiveWindowSeconds(chartName) {
+      const baseWindow = currentWindowSeconds();
+      if (!chartState[chartName]) {
+        return baseWindow;
+      }
+      return Math.min(baseWindow, zoomWindowSeconds);
     }
 
     function makeSvgEl(tag, attrs = {}) {
@@ -456,9 +546,15 @@ DASHBOARD_HTML = """
       const svg = document.getElementById(svgId);
       clearSvg(svg);
 
+      if (options.tooltip) {
+        const title = makeSvgEl("title", {});
+        title.textContent = options.tooltip;
+        svg.appendChild(title);
+      }
+
       const width = 960;
-      const height = 280;
-      const pad = { top: 22, right: 22, bottom: 36, left: 52 };
+      const height = 240;
+      const pad = { top: 18, right: 18, bottom: 30, left: 46 };
       const plotWidth = width - pad.left - pad.right;
       const plotHeight = height - pad.top - pad.bottom;
 
@@ -496,7 +592,11 @@ DASHBOARD_HTML = """
       if (!allValues.length) allValues.push(0);
       let minY = Math.min(...allValues);
       let maxY = Math.max(...allValues);
-      if (options.zeroBaseline) {
+      if (options.symmetricAroundZero) {
+        const maxAbs = Math.max(Math.abs(minY), Math.abs(maxY));
+        minY = -maxAbs;
+        maxY = maxAbs;
+      } else if (options.zeroBaseline) {
         minY = Math.min(minY, 0);
         maxY = Math.max(maxY, 0);
       }
@@ -570,7 +670,7 @@ DASHBOARD_HTML = """
 
       const bottomLeft = makeSvgEl("text", {
         x: pad.left,
-        y: height - 10,
+        y: height - 8,
         fill: "var(--muted)",
         "font-size": 12,
       });
@@ -579,7 +679,7 @@ DASHBOARD_HTML = """
 
       const bottomRight = makeSvgEl("text", {
         x: width - pad.right,
-        y: height - 10,
+        y: height - 8,
         "text-anchor": "end",
         fill: "var(--muted)",
         "font-size": 12,
@@ -648,6 +748,15 @@ DASHBOARD_HTML = """
       }
     }
 
+    function formatCountdown(targetMs, nowMs) {
+      if (targetMs === null || targetMs === undefined) return "--";
+      const deltaSeconds = Math.round((targetMs - nowMs) / 1000);
+      if (deltaSeconds >= 0) {
+        return `dans ${deltaSeconds} s`;
+      }
+      return `retard de ${Math.abs(deltaSeconds)} s`;
+    }
+
     function updateLiveTimers() {
       const status = dashboardState.status;
       if (!status) return;
@@ -655,17 +764,19 @@ DASHBOARD_HTML = """
       const solar = status.solar?.snapshot || {};
       const tesla = status.tesla?.snapshot || {};
       const loop = status.loop || {};
-      const serverTime = isoToMs(status.server_time) || Date.now();
-
-      const loopRemaining = relativeSeconds(serverTime, loop.last_run_at);
-      const teslaAge = relativeSeconds(serverTime, tesla.captured_at);
-      const solarAge = relativeSeconds(serverTime, solar.captured_at);
+      const nowMs = Date.now();
+      const loopTarget = loop.last_run_at && loop.current_interval_seconds
+        ? isoToMs(loop.last_run_at) + (loop.current_interval_seconds * 1000)
+        : null;
+      const teslaTarget = tesla.captured_at ? isoToMs(tesla.captured_at) + (teslaRefreshSeconds * 1000) : null;
+      const teslaAge = relativeSeconds(nowMs, tesla.captured_at);
+      const solarAge = relativeSeconds(nowMs, solar.captured_at);
       const alignmentGap = solar.captured_at && tesla.captured_at
         ? Math.abs((isoToMs(solar.captured_at) || 0) - (isoToMs(tesla.captured_at) || 0)) / 1000
         : null;
 
-      setText("loop-countdown", `${fmtDuration(loopRemaining)} / ${loop.current_interval_seconds || "--"} s`);
-      setText("tesla-countdown", `${fmtDuration(teslaAge)} / ${teslaRefreshSeconds} s`);
+      setText("loop-countdown", formatCountdown(loopTarget, nowMs), loopTarget !== null && loopTarget < nowMs ? "state-warn" : "state-ok");
+      setText("tesla-countdown", formatCountdown(teslaTarget, nowMs), teslaTarget !== null && teslaTarget < nowMs ? "state-warn" : "state-ok");
       setText("solar-age", fmtDuration(solarAge), solarAge !== null && solarAge > 45 ? "state-warn" : "state-ok");
       setText("tesla-age", fmtDuration(teslaAge), teslaAge !== null && teslaAge > 75 ? "state-warn" : "state-ok");
       setText("alignment-gap", fmtDuration(alignmentGap), alignmentGap !== null && alignmentGap > 20 ? "state-warn" : "state-ok");
@@ -685,7 +796,10 @@ DASHBOARD_HTML = """
         const solar = data.solar.snapshot || {};
         const tesla = data.tesla.snapshot || {};
         const loop = data.loop || {};
-        const samples = Array.isArray(timeline.samples) ? chooseSamples(timeline.samples) : [];
+        const samples = Array.isArray(timeline.samples) ? timeline.samples : [];
+        const powerWindow = effectiveWindowSeconds("power");
+        const gridWindow = effectiveWindowSeconds("grid");
+        const ampsWindow = effectiveWindowSeconds("amps");
 
         const gridLabel = solar.grid_watts < 0
           ? `Export ${Math.abs(solar.grid_watts)} W`
@@ -714,7 +828,7 @@ DASHBOARD_HTML = """
         const errorClass = error === "Aucune" ? "state-ok" : "state-error";
         setText("error", error, errorClass);
 
-        renderLineChart(powerChartId, samples, {
+        renderLineChart(powerChartId, chooseSamples(samples, powerWindow), {
           series: [
             {
               color: "var(--accent)",
@@ -724,17 +838,30 @@ DASHBOARD_HTML = """
               color: "var(--warn)",
               value: (sample) => sample.house_consumption_watts,
             },
+          ],
+          zeroBaseline: true,
+          formatLabel: (value) => `${Math.round(value)} W`,
+          formatTime: fmtTime,
+          tooltip: "Courbe de la production solaire et de la consommation maison sur la fenêtre choisie.",
+        });
+
+        renderLineChart(gridChartId, chooseSamples(samples, gridWindow), {
+          series: [
             {
               color: "var(--danger)",
               value: (sample) => sample.grid_watts,
             },
           ],
-          zeroBaseline: true,
-          formatLabel: (value) => `${Math.round(value)} W`,
+          symmetricAroundZero: true,
+          formatLabel: (value) => {
+            const rounded = Math.round(value);
+            return `${rounded > 0 ? "+" : ""}${rounded} W`;
+          },
           formatTime: fmtTime,
+          tooltip: "Courbe du réseau: export négatif, import positif. Le zéro correspond à l'équilibre local.",
         });
 
-        renderLineChart(ampsChartId, samples, {
+        renderLineChart(ampsChartId, chooseSamples(samples, ampsWindow), {
           series: [
             {
               color: "var(--accent-2)",
@@ -749,6 +876,7 @@ DASHBOARD_HTML = """
           yFloor: 0,
           formatLabel: (value) => `${Math.round(value)} A`,
           formatTime: fmtTime,
+          tooltip: "Courbe de l'intensité Tesla réelle et de la consigne calculée.",
         });
       } catch (error) {
         setText("error", error.message || "Erreur inconnue", "state-error");
@@ -763,6 +891,25 @@ DASHBOARD_HTML = """
       if (dashboardState.status && dashboardState.timeline) {
         refresh();
       }
+    });
+    document.querySelectorAll("[data-zoom]").forEach((button) => {
+      const chartName = button.getAttribute("data-zoom");
+      if (!chartName) return;
+      const card = document.querySelector(`.chart-card[data-chart="${chartName}"]`);
+      const applyZoomLabel = () => {
+        button.textContent = chartState[chartName] ? "Dézoomer" : "Zoom";
+        if (card) {
+          card.dataset.zoomed = chartState[chartName] ? "true" : "false";
+        }
+      };
+      applyZoomLabel();
+      button.addEventListener("click", () => {
+        chartState[chartName] = !chartState[chartName];
+        applyZoomLabel();
+        if (dashboardState.status && dashboardState.timeline) {
+          refresh();
+        }
+      });
     });
   </script>
 </body>
