@@ -65,12 +65,12 @@ DASHBOARD_HTML = """
       border: 1px solid var(--line);
       border-radius: 999px;
       color: var(--muted);
-      font-size: 0.8rem;
+      font-size: 0.76rem;
       padding: 7px 11px;
     }
     .pill-hint {
       color: var(--muted);
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       margin-left: 6px;
     }
     .timing select {
@@ -100,15 +100,29 @@ DASHBOARD_HTML = """
       padding: 14px;
       box-shadow: 0 12px 30px rgba(35, 32, 26, 0.06);
     }
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .card-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
     .label {
       color: var(--muted);
-      font-size: 0.78rem;
-      margin-bottom: 6px;
+      font-size: 0.72rem;
+      line-height: 1.2;
     }
     .value {
-      font-size: clamp(1.15rem, 3vw, 1.55rem);
+      font-size: clamp(1rem, 2.5vw, 1.32rem);
       font-weight: 600;
       letter-spacing: -0.02em;
+      line-height: 1.15;
     }
     .meta-grid {
       display: grid;
@@ -121,7 +135,7 @@ DASHBOARD_HTML = """
       gap: 12px;
       padding: 8px 0;
       border-top: 1px solid var(--line);
-      font-size: 0.88rem;
+      font-size: 0.82rem;
     }
     .meta-line:first-child {
       border-top: 0;
@@ -157,13 +171,13 @@ DASHBOARD_HTML = """
       margin-bottom: 10px;
     }
     .chart-title {
-      font-size: 0.95rem;
+      font-size: 0.88rem;
       font-weight: 600;
       color: var(--ink);
     }
     .chart-subtitle {
       color: var(--muted);
-      font-size: 0.78rem;
+      font-size: 0.72rem;
     }
     .chart-svg {
       width: 100%;
@@ -228,6 +242,21 @@ DASHBOARD_HTML = """
       font-size: 0.7rem;
       cursor: help;
     }
+    .info-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.7rem;
+      line-height: 1;
+      cursor: help;
+      background: rgba(255, 253, 248, 0.9);
+    }
     .chart-card[data-zoomed="true"] {
       border-color: rgba(0, 122, 90, 0.45);
       box-shadow: 0 16px 36px rgba(35, 32, 26, 0.08);
@@ -267,52 +296,97 @@ DASHBOARD_HTML = """
     </div>
     <div class="timing">
       <div class="pill">Page web : toutes les {{ refresh_ms // 1000 }} s</div>
-      <div class="pill">Régulation : <span id="loop-countdown">--</span><span class="pill-hint">/ <span id="loop-period">{{ loop_interval_seconds }} s</span></span></div>
-      <div class="pill">Tesla : <span id="tesla-countdown">--</span><span class="pill-hint">/ <span id="tesla-period">{{ tesla_refresh_seconds }} s</span></span></div>
+      <div class="pill">Prochaine régulation : <span id="loop-countdown">--</span><span class="pill-hint">cadence <span id="loop-period">{{ loop_interval_seconds }} s</span></span></div>
+      <div class="pill">Prochaine lecture Tesla : <span id="tesla-countdown">--</span><span class="pill-hint">cadence <span id="tesla-period">{{ tesla_refresh_seconds }} s</span></span></div>
       <div class="pill">Mode : <span id="schedule-mode">--</span></div>
     </div>
 
     <section class="sync-row">
       <article class="card">
-        <div class="label">Âge de la mesure solaire</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Âge de la mesure solaire</div>
+          </div>
+          <span class="info-icon" title="Temps écoulé depuis la dernière mesure Envoy utilisée par le dashboard.">i</span>
+        </div>
         <div class="value" id="solar-age">--</div>
       </article>
       <article class="card">
-        <div class="label">Âge de la mesure Tesla</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Âge de la mesure Tesla</div>
+          </div>
+          <span class="info-icon" title="Temps écoulé depuis la dernière lecture Tesla utilisée par le dashboard.">i</span>
+        </div>
         <div class="value" id="tesla-age">--</div>
       </article>
       <article class="card">
-        <div class="label">Écart de mesure</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Décalage des mesures</div>
+          </div>
+          <span class="info-icon" title="Différence d'horodatage entre la dernière mesure solaire et la dernière mesure Tesla. Plus l'écart est grand, plus les chiffres peuvent sembler décalés.">i</span>
+        </div>
         <div class="value" id="alignment-gap">--</div>
       </article>
     </section>
 
     <section class="summary-row">
       <article class="card">
-        <div class="label">Production solaire</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Production solaire</div>
+          </div>
+          <span class="info-icon" title="Puissance instantanée produite par l'installation photovoltaïque.">i</span>
+        </div>
         <div class="value" id="production">--</div>
       </article>
       <article class="card">
-        <div class="label">Consommation maison</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Consommation maison</div>
+          </div>
+          <span class="info-icon" title="Puissance instantanée consommée par la maison. La charge Tesla peut en faire partie selon le moment.">i</span>
+        </div>
         <div class="value" id="house">--</div>
       </article>
       <article class="card">
-        <div class="label">Réseau</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Réseau</div>
+          </div>
+          <span class="info-icon" title="Solde réseau: export négatif, import positif. Le but est de rester le plus souvent proche de l'export nul.">i</span>
+        </div>
         <div class="value" id="grid">--</div>
       </article>
     </section>
 
     <section class="summary-row">
       <article class="card">
-        <div class="label">Batterie Tesla</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Batterie Tesla</div>
+          </div>
+          <span class="info-icon" title="Pourcentage de charge actuel de la batterie du véhicule.">i</span>
+        </div>
         <div class="value" id="battery">--</div>
       </article>
       <article class="card">
-        <div class="label">État de charge</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">État de charge</div>
+          </div>
+          <span class="info-icon" title="État de charge remonté par l'API Tesla, par exemple Charging ou Stopped.">i</span>
+        </div>
         <div class="value" id="charging-state">--</div>
       </article>
       <article class="card">
-        <div class="label">Intensité Tesla</div>
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Intensité Tesla</div>
+          </div>
+          <span class="info-icon" title="Courant actuellement appliqué à la charge du véhicule.">i</span>
+        </div>
         <div class="value" id="amps">--</div>
       </article>
     </section>
@@ -334,11 +408,11 @@ DASHBOARD_HTML = """
           <div>
             <div class="chart-title">
               Puissance
-              <span class="chart-help" title="Montre la production solaire et la consommation maison. La courbe réseau est séparée pour éviter de confondre export et import avec le reste.">i</span>
             </div>
             <div class="chart-subtitle">Production et consommation de la maison</div>
           </div>
           <div class="chart-head-actions">
+            <span class="chart-help" title="Montre la production solaire et la consommation maison. La courbe réseau est séparée pour éviter de confondre export et import avec le reste.">i</span>
             <button class="zoom-button" type="button" data-zoom="power" title="Zoomer sur une fenêtre plus courte">Zoom</button>
           </div>
         </div>
@@ -354,11 +428,11 @@ DASHBOARD_HTML = """
           <div>
             <div class="chart-title">
               Réseau
-              <span class="chart-help" title="Montre l'export et l'import réseau. Les valeurs négatives sont l'export, les valeurs positives l'import.">i</span>
             </div>
             <div class="chart-subtitle">Export négatif, import positif</div>
           </div>
           <div class="chart-head-actions">
+            <span class="chart-help" title="Montre l'export et l'import réseau. Les valeurs négatives sont l'export, les valeurs positives l'import.">i</span>
             <button class="zoom-button" type="button" data-zoom="grid" title="Zoomer sur une fenêtre plus courte">Zoom</button>
           </div>
         </div>
@@ -373,11 +447,11 @@ DASHBOARD_HTML = """
           <div>
             <div class="chart-title">
               Tesla
-              <span class="chart-help" title="Montre l'intensité réellement appliquée et la consigne calculée pour la voiture.">i</span>
             </div>
             <div class="chart-subtitle">Intensité réelle et consigne</div>
           </div>
           <div class="chart-head-actions">
+            <span class="chart-help" title="Montre l'intensité réellement appliquée et la consigne calculée pour la voiture.">i</span>
             <button class="zoom-button" type="button" data-zoom="amps" title="Zoomer sur une fenêtre plus courte">Zoom</button>
           </div>
         </div>
@@ -391,12 +465,24 @@ DASHBOARD_HTML = """
 
     <section class="meta-grid">
       <article class="card">
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Régulation</div>
+          </div>
+          <span class="info-icon" title="Dernière décision de régulation: surplus, consigne calculée, et dernière mise à jour de la boucle.">i</span>
+        </div>
         <div class="meta-line"><span>Surplus exporté</span><strong id="surplus">--</strong></div>
         <div class="meta-line"><span>Cible calculée</span><strong id="target">--</strong></div>
         <div class="meta-line"><span>Dernière décision</span><strong id="decision">--</strong></div>
         <div class="meta-line"><span>Dernière mise à jour</span><strong id="updated-at">--</strong></div>
       </article>
       <article class="card">
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Véhicule</div>
+          </div>
+          <span class="info-icon" title="État du véhicule Tesla détecté par l'API Fleet et dernière commande envoyée.">i</span>
+        </div>
         <div class="meta-line"><span>Véhicule</span><strong id="vehicle-name">--</strong></div>
         <div class="meta-line"><span>État véhicule</span><strong id="vehicle-state">--</strong></div>
         <div class="meta-line"><span>Branchée</span><strong id="plugged-in">--</strong></div>
@@ -754,7 +840,7 @@ DASHBOARD_HTML = """
       if (deltaSeconds >= 0) {
         return `dans ${deltaSeconds} s`;
       }
-      return `retard de ${Math.abs(deltaSeconds)} s`;
+      return `en attente depuis ${Math.abs(deltaSeconds)} s`;
     }
 
     function updateLiveTimers() {
