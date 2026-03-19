@@ -62,11 +62,20 @@ DASHBOARD_HTML = """
       top: 14px;
       width: 18px;
       height: 18px;
+      padding: 0;
       border-radius: 999px;
       border: 2px solid rgba(0, 122, 90, 0.14);
       background:
         conic-gradient(var(--accent) 0deg, rgba(0, 122, 90, 0.12) 0deg);
       box-shadow: 0 0 0 1px rgba(255, 253, 248, 0.95) inset;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      outline: none;
+    }
+    .refresh-orb:hover {
+      border: 2px solid rgba(0, 122, 90, 0.14);
+      filter: saturate(1.1);
     }
     .refresh-orb::after {
       content: "";
@@ -400,7 +409,7 @@ DASHBOARD_HTML = """
   <main>
     <div class="title-row">
       <div class="title-lockup">
-        <span class="refresh-orb" id="refresh-orb" aria-hidden="true"></span>
+        <button class="refresh-orb" id="refresh-orb" type="button" title="Rafraîchir le tableau de bord maintenant" aria-label="Rafraîchir le tableau de bord maintenant"></button>
         <h1>Tesla Charge</h1>
       </div>
     </div>
@@ -586,7 +595,16 @@ DASHBOARD_HTML = """
     </section>
 
     <div class="footer">
-      API disponibles: <code>/solar</code>, <code>/tesla</code>, <code>/status</code>, <code>POST /tesla/amps</code>
+      API disponibles:
+      <code>GET /</code>,
+      <code>GET /solar</code>,
+      <code>GET /tesla</code>,
+      <code>GET /status</code>,
+      <code>GET /timeline</code>,
+      <code>POST /settings/cadences</code>,
+      <code>POST /actions/refresh/loop</code>,
+      <code>POST /actions/refresh/tesla</code>,
+      <code>POST /tesla/amps</code>
     </div>
   </main>
 
@@ -1041,14 +1059,7 @@ DASHBOARD_HTML = """
       setText("loop-countdown", formatCountdown(loopTarget, nowMs), loopTarget !== null && loopTarget < nowMs ? "state-warn" : "state-ok");
       setText("tesla-countdown", formatCountdown(teslaTarget, nowMs), teslaTarget !== null && teslaTarget < nowMs ? "state-warn" : "state-ok");
 
-      const elapsed = Math.max(0, (nowMs - pageState.lastRefreshAt) / 1000);
-      const orb = document.getElementById("refresh-orb");
-      if (orb) {
-        const progress = Math.min(1, elapsed / (refreshMs / 1000));
-        const angle = Math.max(0, Math.min(360, progress * 360));
-        orb.style.background = `conic-gradient(var(--accent) 0deg ${angle}deg, rgba(0, 122, 90, 0.12) ${angle}deg 360deg)`;
-        orb.style.boxShadow = `0 0 0 1px rgba(255, 253, 248, 0.95) inset, 0 0 0 ${Math.round(progress * 4)}px rgba(0, 122, 90, ${0.08 * (1 - progress)})`;
-      }
+      updateRefreshOrb();
     }
 
     async function refresh() {
@@ -1062,6 +1073,7 @@ DASHBOARD_HTML = """
         dashboardState.status = data;
         dashboardState.timeline = timeline;
         pageState.lastRefreshAt = Date.now();
+        updateRefreshOrb();
 
         const solar = data.solar.snapshot || {};
         const tesla = data.tesla.snapshot || {};
@@ -1196,6 +1208,19 @@ DASHBOARD_HTML = """
           await applyCadenceChange();
         } catch (error) {
           setText("error", error.message || "Erreur inconnue", "state-error");
+        }
+      });
+    }
+    const refreshOrb = document.getElementById("refresh-orb");
+    if (refreshOrb) {
+      refreshOrb.addEventListener("click", async () => {
+        try {
+          refreshOrb.disabled = true;
+          await refresh();
+        } catch (error) {
+          setText("error", error.message || "Erreur inconnue", "state-error");
+        } finally {
+          refreshOrb.disabled = false;
         }
       });
     }
