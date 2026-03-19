@@ -41,6 +41,10 @@ class AppConfig:
     tesla_status_interval_seconds: int
     tesla_proxy_retry_seconds: int
     nominal_voltage: int
+    charge_start_amps: int
+    charge_stop_amps: int
+    charge_start_confirm_seconds: int
+    charge_stop_confirm_seconds: int
     day_active_start: str
     day_active_end: str
     api_host: str
@@ -97,6 +101,10 @@ class AppConfig:
             min_amps = 6
         if max_amps < min_amps:
             max_amps = min_amps
+        charge_start_amps = max(min_amps, _get_int("TESLA_CHARGE_START_AMPS", min_amps))
+        charge_stop_amps = max(0, min(charge_start_amps - 1, _get_int("TESLA_CHARGE_STOP_AMPS", 5)))
+        charge_start_confirm_seconds = max(1, _get_int("TESLA_CHARGE_START_CONFIRM_SEC", 60))
+        charge_stop_confirm_seconds = max(1, _get_int("TESLA_CHARGE_STOP_CONFIRM_SEC", 90))
 
         return cls(
             envoy_url=os.getenv(
@@ -126,6 +134,10 @@ class AppConfig:
             tesla_status_interval_seconds=tesla_status_interval_seconds,
             tesla_proxy_retry_seconds=tesla_proxy_retry_seconds,
             nominal_voltage=nominal_voltage,
+            charge_start_amps=charge_start_amps,
+            charge_stop_amps=charge_stop_amps,
+            charge_start_confirm_seconds=charge_start_confirm_seconds,
+            charge_stop_confirm_seconds=charge_stop_confirm_seconds,
             day_active_start=os.getenv("DAY_ACTIVE_START", "07:00").strip() or "07:00",
             day_active_end=os.getenv("DAY_ACTIVE_END", "22:00").strip() or "22:00",
             api_host=os.getenv("APP_HOST", "0.0.0.0"),

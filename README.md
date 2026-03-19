@@ -91,6 +91,10 @@ La boucle passe en veille hors plage de jour, avec un réveil plus rare toutes l
 - `TESLA_STATUS_INTERVAL_SEC` : défaut `30`
 - `TESLA_PROXY_RETRY_SEC` : défaut `60`
 - `TESLA_NOMINAL_VOLTAGE` : défaut `220`
+- `TESLA_CHARGE_START_AMPS` : défaut `6`
+- `TESLA_CHARGE_STOP_AMPS` : défaut `5`
+- `TESLA_CHARGE_START_CONFIRM_SEC` : défaut `60`
+- `TESLA_CHARGE_STOP_CONFIRM_SEC` : défaut `90`
 - `DAY_ACTIVE_START` : défaut `07:00`
 - `DAY_ACTIVE_END` : défaut `22:00`
 - `TESLA_MIN_AMPS` : défaut `6`
@@ -176,6 +180,8 @@ Conséquence :
 - entre `07:00` et `22:00`, la régulation fonctionne normalement ;
 - entre `22:00` et `07:00`, la boucle ralentit fortement ;
 - aucune logique spécifique heures creuses n’est appliquée.
+- la charge ne démarre que si le surplus reste suffisant pendant `TESLA_CHARGE_START_CONFIRM_SEC` ;
+- la charge s’arrête si le surplus passe sous le seuil bas pendant `TESLA_CHARGE_STOP_CONFIRM_SEC`.
 
 ### Vérifications utiles
 
@@ -211,6 +217,16 @@ Exemple :
 - consigne finale : `17 A`
 
 Avec `25 W` d’import réseau et `8 A` déjà demandés par la voiture, la consigne passe à `7 A`. C’est volontaire : dès qu’on importe un peu, on baisse d’un cran pour revenir vers un léger export. Si tu veux encore plus de finesse, la prochaine étape serait d’ajouter une marge de sécurité configurable.
+
+Réglages liés :
+
+```text
+TESLA_CHARGE_START_AMPS=6
+TESLA_CHARGE_STOP_AMPS=5
+TESLA_CHARGE_START_CONFIRM_SEC=60
+TESLA_CHARGE_STOP_CONFIRM_SEC=90
+TESLA_NOMINAL_VOLTAGE=220
+```
 
 Vérifier le service principal :
 

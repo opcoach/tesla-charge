@@ -76,6 +76,8 @@ class ControlLoop:
             last_success_at=None,
             last_error=None,
         )
+        self._start_candidate_since: datetime | None = None
+        self._stop_candidate_since: datetime | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -164,46 +166,134 @@ class ControlLoop:
 
             self._stop_event.wait(wait_seconds)
 
-    def _apply_decision(self, desired_amps: int, tesla_snapshot: TeslaSnapshot) -> dict[str, Any]:
+    def _apply_decision(
+        self,
+        desired_amps: int,
+        tesla_snapshot: TeslaSnapshot,
+    ) -> dict[str, Any]:
         if not tesla_snapshot.plugged_in:
+            self._start_candidate_since = None
+            self._stop_candidate_since = None
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "vehicle_not_plugged",
             }
 
         if tesla_snapshot.vehicle_state != "online":
+            self._start_candidate_since = None
+            self._stop_candidate_since = None
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "vehicle_not_online",
             }
 
-        if tesla_snapshot.charging_amps == desired_amps:
+        now = datetime.now(timezone.utc)
+        is_charging = self._is_charging(tesla_snapshot)
+
+        if is_charging:
+            self._start_candidate_since = None
+            if desired_amps <= self.config.charge_stop_amps:
+                if self._stop_candidate_since is None:
+                    self._stop_candidate_since = now
+                if not self._is_confirmed(
+                    self._stop_candidate_since,
+                    now,
+                    self.config.charge_stop_confirm_seconds,
+                ):
+                    return {
+                        "applied_amps": tesla_snapshot.charging_amps,
+                        "reason": "stop_pending",
+                    }
+                self._stop_candidate_since = None
+                try:
+                    result = self.tesla_controller.stop_charging(source="control_loop")
+                except TeslaProxyUnavailableError:
+                    return {
+                        "applied_amps": tesla_snapshot.charging_amps,
+                        "reason": "proxy_unavailable",
+                    }
+                return {
+                    "applied_amps": 0,
+                    "reason": result.get("reason", "stopped"),
+                }
+
+            self._stop_candidate_since = None
+            if tesla_snapshot.charging_amps == desired_amps:
+                return {
+                    "applied_amps": desired_amps,
+                    "reason": "unchanged",
+                }
+
+            try:
+                result = self.tesla_controller.set_charging_amps(
+                    desired_amps,
+                    source="control_loop",
+                )
+            except TeslaProxyUnavailableError:
+                return {
+                    "applied_amps": tesla_snapshot.charging_amps,
+                    "reason": "proxy_unavailable",
+                }
             return {
-                "applied_amps": desired_amps,
-                "reason": "unchanged",
+                "applied_amps": result.get("requested_amps"),
+                "reason": result.get("reason", "updated"),
             }
 
+        self._stop_candidate_since = None
+        if desired_amps < self.config.charge_start_amps:
+            self._start_candidate_since = None
+            return {
+                "applied_amps": tesla_snapshot.charging_amps,
+                "reason": "waiting_for_surplus",
+            }
+
+        if self._start_candidate_since is None:
+            self._start_candidate_since = now
+        if not self._is_confirmed(
+            self._start_candidate_since,
+            now,
+            self.config.charge_start_confirm_seconds,
+        ):
+            return {
+                "applied_amps": tesla_snapshot.charging_amps,
+                "reason": "start_pending",
+            }
+
+        self._start_candidate_since = None
         try:
-            result = self.tesla_controller.set_charging_amps(
-                desired_amps,
-                source="control_loop",
-            )
+            start_result = self.tesla_controller.start_charging(source="control_loop")
+            desired_after_start = desired_amps
+            set_result = start_result
+            if desired_amps >= self.config.min_amps:
+                set_result = self.tesla_controller.set_charging_amps(
+                    desired_amps,
+                    source="control_loop",
+                )
+                desired_after_start = set_result.get("requested_amps", desired_amps)
         except TeslaProxyUnavailableError:
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "proxy_unavailable",
             }
         return {
-            "applied_amps": result.get("requested_amps"),
-            "reason": result.get("reason", "updated"),
+            "applied_amps": desired_after_start,
+            "reason": set_result.get("reason", "started"),
         }
+
+    @staticmethod
+    def _is_charging(tesla_snapshot: TeslaSnapshot) -> bool:
+        return tesla_snapshot.charging_state in {"Charging", "Starting"}
+
+    @staticmethod
+    def _is_confirmed(since: datetime, now: datetime, required_seconds: int) -> bool:
+        return (now - since).total_seconds() >= required_seconds
 
     def _calculate_desired_amps(self, solar_snapshot: SolarSnapshot, tesla_snapshot: TeslaSnapshot) -> int:
         current_amps = tesla_snapshot.charging_amps or 0
         net_watts = solar_snapshot.export_watts - solar_snapshot.import_watts
         delta_amps = math.floor(net_watts / self.config.nominal_voltage)
         raw_amps = current_amps + delta_amps
-        return max(self.config.min_amps, min(self.config.max_amps, raw_amps))
+        return max(0, min(self.config.max_amps, raw_amps))
 
     def _get_schedule_mode(self) -> tuple[str, int]:
         current_local_time = datetime.now(self._timezone).time()

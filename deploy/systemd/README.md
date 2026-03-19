@@ -28,6 +28,8 @@ Dans `/etc/default/tesla-charge`, remplace au minimum :
 - `TESLA_CLIENT_ID`
 - `TESLA_VEHICLE_NAME` si tu veux cibler explicitement `Tesla opc`
 - `TESLA_NOMINAL_VOLTAGE` si tu veux ajuster le calcul de consigne
+- `TESLA_CHARGE_START_AMPS` et `TESLA_CHARGE_STOP_AMPS` si tu veux ajuster les seuils de démarrage et d'arrêt
+- `TESLA_CHARGE_START_CONFIRM_SEC` et `TESLA_CHARGE_STOP_CONFIRM_SEC` si tu veux ajuster les temporisations
 
 Vérifie aussi le fichier `/etc/systemd/system/tesla-charge.service` si ton utilisateur Raspberry n’est pas `olivier`.
 
@@ -125,6 +127,10 @@ Dans `/etc/default/tesla-charge`, garde en général :
 TESLA_PROXY_URL=https://localhost:4443
 TESLA_PROXY_VERIFY_SSL=false
 TESLA_NOMINAL_VOLTAGE=220
+TESLA_CHARGE_START_AMPS=6
+TESLA_CHARGE_STOP_AMPS=5
+TESLA_CHARGE_START_CONFIRM_SEC=60
+TESLA_CHARGE_STOP_CONFIRM_SEC=90
 ```
 
 Le proxy Tesla officiel écoute en HTTPS. Le mode `VERIFY_SSL=false` est acceptable ici parce que le service reste lié à `localhost`.

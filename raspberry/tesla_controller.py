@@ -120,7 +120,11 @@ class TeslaController:
                         "reason": "unchanged",
                     }
 
-                response_body = self._post_proxy_command(merged["vin"], clamped_amps)
+                response_body = self._post_proxy_command(
+                    merged["vin"],
+                    "set_charging_amps",
+                    {"charging_amps": clamped_amps},
+                )
                 response_data = response_body.get("response", {})
                 result = response_data.get("result", True)
                 reason = response_data.get("reason")
@@ -151,6 +155,100 @@ class TeslaController:
                 "reason": "updated" if changed else "unchanged",
                 "response": response_body,
                 "snapshot": snapshot_after.to_dict(),
+            }
+        except Exception as exc:
+            self.record_error(exc)
+            raise
+
+    def start_charging(self, source: str = "manual") -> dict[str, Any]:
+        try:
+            with self._lock:
+                vehicle = self._ensure_vehicle()
+                summary = self._get_vehicle_summary(vehicle["vin"])
+                if summary.get("state") != "online":
+                    raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
+
+                vehicle_data = self._get_vehicle_data(vehicle["vin"])
+                merged = self._merge_vehicle(vehicle, summary, vehicle_data)
+                snapshot_before = self._snapshot_from_vehicle(merged)
+                if not snapshot_before.plugged_in:
+                    raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
+
+                if snapshot_before.charging_state == "Charging":
+                    LOGGER.info("Commande %s ignorée: charge déjà active", source)
+                    return {
+                        "changed": False,
+                        "requested_amps": snapshot_before.charging_amps,
+                        "current_amps": snapshot_before.charging_amps,
+                        "reason": "already_charging",
+                    }
+
+                response_body = self._post_proxy_command(merged["vin"], "charge_start", {})
+                response_data = response_body.get("response", {})
+                result = response_data.get("result", True)
+                reason = response_data.get("reason")
+                if result is False and reason != "already_started":
+                    raise RuntimeError(
+                        f"Commande Tesla refusée: {reason or 'raison inconnue'}"
+                    )
+
+                self._last_commanded_amps = snapshot_before.charging_amps or self.config.min_amps
+                self._last_error = None
+
+            LOGGER.info("Commande %s envoyée: démarrage de la charge", source)
+            return {
+                "changed": reason != "already_started",
+                "requested_amps": self._last_commanded_amps,
+                "current_amps": snapshot_before.charging_amps,
+                "reason": "started" if reason != "already_started" else "already_started",
+                "response": response_body,
+            }
+        except Exception as exc:
+            self.record_error(exc)
+            raise
+
+    def stop_charging(self, source: str = "manual") -> dict[str, Any]:
+        try:
+            with self._lock:
+                vehicle = self._ensure_vehicle()
+                summary = self._get_vehicle_summary(vehicle["vin"])
+                if summary.get("state") != "online":
+                    raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
+
+                vehicle_data = self._get_vehicle_data(vehicle["vin"])
+                merged = self._merge_vehicle(vehicle, summary, vehicle_data)
+                snapshot_before = self._snapshot_from_vehicle(merged)
+                if not snapshot_before.plugged_in:
+                    raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
+
+                if snapshot_before.charging_state != "Charging":
+                    LOGGER.info("Commande %s ignorée: charge déjà arrêtée", source)
+                    return {
+                        "changed": False,
+                        "requested_amps": 0,
+                        "current_amps": snapshot_before.charging_amps,
+                        "reason": "already_stopped",
+                    }
+
+                response_body = self._post_proxy_command(merged["vin"], "charge_stop", {})
+                response_data = response_body.get("response", {})
+                result = response_data.get("result", True)
+                reason = response_data.get("reason")
+                if result is False and reason != "already_stopped":
+                    raise RuntimeError(
+                        f"Commande Tesla refusée: {reason or 'raison inconnue'}"
+                    )
+
+                self._last_commanded_amps = 0
+                self._last_error = None
+
+            LOGGER.info("Commande %s envoyée: arrêt de la charge", source)
+            return {
+                "changed": reason != "already_stopped",
+                "requested_amps": 0,
+                "current_amps": snapshot_before.charging_amps,
+                "reason": "stopped" if reason != "already_stopped" else "already_stopped",
+                "response": response_body,
             }
         except Exception as exc:
             self.record_error(exc)
@@ -279,14 +377,19 @@ class TeslaController:
             captured_at=datetime.now(timezone.utc).isoformat(),
         )
 
-    def _post_proxy_command(self, vin: str, amps: int) -> dict[str, Any]:
+    def _post_proxy_command(
+        self,
+        vin: str,
+        command: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         if self._is_proxy_in_cooldown():
             raise TeslaProxyUnavailableError(
                 f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
             )
 
         access_token = self._ensure_access_token()
-        url = f"{self.config.tesla_proxy_url}/api/1/vehicles/{vin}/command/set_charging_amps"
+        url = f"{self.config.tesla_proxy_url}/api/1/vehicles/{vin}/command/{command}"
         try:
             response = requests.post(
                 url,
@@ -294,7 +397,7 @@ class TeslaController:
                     "Authorization": f"Bearer {access_token}",
                     "Content-Type": "application/json",
                 },
-                json={"charging_amps": amps},
+                json=payload,
                 timeout=self.config.requests_timeout_seconds,
                 verify=self._proxy_verify_arg(),
             )
@@ -315,7 +418,7 @@ class TeslaController:
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json",
                     },
-                    json={"charging_amps": amps},
+                    json=payload,
                     timeout=self.config.requests_timeout_seconds,
                     verify=self._proxy_verify_arg(),
                 )
