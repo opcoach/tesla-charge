@@ -201,7 +201,7 @@ class ControlLoop:
     def _calculate_desired_amps(self, solar_snapshot: SolarSnapshot, tesla_snapshot: TeslaSnapshot) -> int:
         current_amps = tesla_snapshot.charging_amps or 0
         net_watts = solar_snapshot.export_watts - solar_snapshot.import_watts
-        delta_amps = math.trunc(net_watts / self.config.nominal_voltage)
+        delta_amps = math.floor(net_watts / self.config.nominal_voltage)
         raw_amps = current_amps + delta_amps
         return max(self.config.min_amps, min(self.config.max_amps, raw_amps))
 

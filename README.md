@@ -60,7 +60,7 @@ Le service :
 
 - lit les données de production et de réseau via l’Envoy Enphase ;
 - calcule le surplus exporté ;
-- calcule une consigne Tesla incrémentale à partir du courant déjà demandé par la voiture et du flux réseau signé, avec la formule `current_amps + trunc((export_watts - import_watts) / tension_nominale)`, puis borne le résultat entre `TESLA_MIN_AMPS` et `TESLA_MAX_AMPS` ;
+- calcule une consigne Tesla incrémentale à partir du courant déjà demandé par la voiture et du flux réseau signé, avec la formule `current_amps + floor((export_watts - import_watts) / tension_nominale)`, puis borne le résultat entre `TESLA_MIN_AMPS` et `TESLA_MAX_AMPS` ;
 - lit l’état du véhicule via Tesla Fleet API à partir d’un `refresh_token` ;
 - borne la consigne entre `6 A` et `32 A` ;
 - n’envoie pas de commande si l’ampérage ne change pas ;
@@ -196,7 +196,7 @@ ss -ltnp | grep 4443
 Le calcul de la consigne Tesla est volontairement incrémental pour pousser un maximum de surplus vers la voiture sans oublier le courant déjà demandé par la Tesla :
 
 ```text
-ampères = courant_Tesla_actuel + trunc((export_watts - import_watts) / tension_nominale)
+ampères = courant_Tesla_actuel + floor((export_watts - import_watts) / tension_nominale)
 ```
 
 Le résultat est ensuite limité entre `TESLA_MIN_AMPS` et `TESLA_MAX_AMPS`.
@@ -207,10 +207,10 @@ Exemple :
 - surplus exporté : `2068 W`
 - tension nominale utilisée : `220 V`
 - calcul brut : `2068 / 220 = 9,40`
-- `trunc(9,40)` donne `9 A`
+- `floor(9,40)` donne `9 A`
 - consigne finale : `17 A`
 
-Avec `1733 W` de surplus et `7 A` déjà demandés par la voiture, la consigne devient `14 A` environ. Si tu veux encore plus de finesse, la prochaine étape serait d’ajouter une marge de sécurité configurable.
+Avec `25 W` d’import réseau et `8 A` déjà demandés par la voiture, la consigne passe à `7 A`. C’est volontaire : dès qu’on importe un peu, on baisse d’un cran pour revenir vers un léger export. Si tu veux encore plus de finesse, la prochaine étape serait d’ajouter une marge de sécurité configurable.
 
 Vérifier le service principal :
 
