@@ -1129,6 +1129,8 @@ DASHBOARD_HTML = """
         setText("last-commanded-amps", fmtAmps(result.tesla.last_commanded_amps));
         setText("last-commanded-at", fmtDate(result.tesla.last_commanded_at));
         setText("error", result.tesla.last_error || "Aucune", result.tesla.last_error ? "state-error" : "state-ok");
+        updateLiveTimers();
+        return;
       }
       await refresh();
     }
