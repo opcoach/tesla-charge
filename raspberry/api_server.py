@@ -749,6 +749,24 @@ DASHBOARD_HTML = """
       }
     }
 
+    function renderTeslaSnapshot(snapshot, statusPayload) {
+      const isOffline = snapshot?.vehicle_state === "offline";
+      const batteryValue = isOffline ? "veille" : fmtPercent(snapshot?.battery_percent);
+      const chargingStateValue = isOffline ? "veille" : (snapshot?.charging_state || "--");
+      const ampsValue = isOffline ? "veille" : fmtAmps(snapshot?.charging_amps);
+      setText("battery", batteryValue, isOffline ? "state-warn" : "");
+      setText("charging-state", chargingStateValue, isOffline ? "state-warn" : (snapshot?.charging_state === "Charging" ? "state-ok" : ""));
+      setText("amps", ampsValue, isOffline ? "state-warn" : "");
+      setText("vehicle-name", snapshot?.vehicle_name || "--");
+      setText("vehicle-state", snapshot?.vehicle_state || "--", snapshot?.vehicle_state === "online" ? "state-ok" : "state-warn");
+      setText("plugged-in", snapshot?.plugged_in ? "Oui" : "Non", snapshot?.plugged_in ? "state-ok" : "state-warn");
+      if (statusPayload) {
+        setText("last-commanded-amps", fmtAmps(statusPayload.last_commanded_amps));
+        setText("last-commanded-at", fmtDate(statusPayload.last_commanded_at));
+        setText("error", statusPayload.last_error || "Aucune", statusPayload.last_error ? "state-error" : "state-ok");
+      }
+    }
+
     function setText(id, value, className) {
       const node = document.getElementById(id);
       if (!node.dataset.baseClass) {
@@ -1120,15 +1138,7 @@ DASHBOARD_HTML = """
         }
         dashboardState.status.tesla = result.tesla;
         const snapshot = result.tesla.snapshot || {};
-        setText("battery", fmtPercent(snapshot.battery_percent));
-        setText("charging-state", snapshot.charging_state || "--", snapshot.charging_state === "Charging" ? "state-ok" : "");
-        setText("amps", fmtAmps(snapshot.charging_amps));
-        setText("vehicle-name", snapshot.vehicle_name || "--");
-        setText("vehicle-state", snapshot.vehicle_state || "--", snapshot.vehicle_state === "online" ? "state-ok" : "state-warn");
-        setText("plugged-in", snapshot.plugged_in ? "Oui" : "Non", snapshot.plugged_in ? "state-ok" : "state-warn");
-        setText("last-commanded-amps", fmtAmps(result.tesla.last_commanded_amps));
-        setText("last-commanded-at", fmtDate(result.tesla.last_commanded_at));
-        setText("error", result.tesla.last_error || "Aucune", result.tesla.last_error ? "state-error" : "state-ok");
+        renderTeslaSnapshot(snapshot, result.tesla);
         updateLiveTimers();
         return;
       }
@@ -1203,18 +1213,11 @@ DASHBOARD_HTML = """
         setText("production", fmtWatts(solar.production_watts));
         setText("house", fmtWatts(solar.house_consumption_watts));
         setText("grid", gridLabel, solar.grid_watts < 0 ? "state-ok" : "state-warn");
-        setText("battery", fmtPercent(tesla.battery_percent));
-        setText("charging-state", tesla.charging_state || "--", tesla.charging_state === "Charging" ? "state-ok" : "");
-        setText("amps", fmtAmps(tesla.charging_amps));
+        renderTeslaSnapshot(tesla, data.tesla);
         setText("surplus", fmtWatts(solar.export_watts));
         setText("target", fmtAmps(loop.desired_amps));
         setText("decision", loop.last_reason || "--");
         setText("updated-at", fmtDate(loop.last_run_at));
-        setText("last-commanded-at", fmtDate(data.tesla.last_commanded_at));
-        setText("last-commanded-amps", fmtAmps(data.tesla.last_commanded_amps));
-        setText("vehicle-name", tesla.vehicle_name || "--");
-        setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
-        setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
         setText("schedule-mode", formatScheduleMode(loop.schedule_mode));
         updateAutomationToggle(data);
         if (loopIntervalSelect) {
