@@ -1113,7 +1113,23 @@ DASHBOARD_HTML = """
       const endpoint = kind === "tesla"
         ? "/actions/refresh/tesla"
         : "/actions/refresh/loop";
-      await postJson(endpoint, {});
+      const result = await postJson(endpoint, {});
+      if (kind === "tesla" && result?.tesla) {
+        if (!dashboardState.status) {
+          dashboardState.status = {};
+        }
+        dashboardState.status.tesla = result.tesla;
+        const snapshot = result.tesla.snapshot || {};
+        setText("battery", fmtPercent(snapshot.battery_percent));
+        setText("charging-state", snapshot.charging_state || "--", snapshot.charging_state === "Charging" ? "state-ok" : "");
+        setText("amps", fmtAmps(snapshot.charging_amps));
+        setText("vehicle-name", snapshot.vehicle_name || "--");
+        setText("vehicle-state", snapshot.vehicle_state || "--", snapshot.vehicle_state === "online" ? "state-ok" : "state-warn");
+        setText("plugged-in", snapshot.plugged_in ? "Oui" : "Non", snapshot.plugged_in ? "state-ok" : "state-warn");
+        setText("last-commanded-amps", fmtAmps(result.tesla.last_commanded_amps));
+        setText("last-commanded-at", fmtDate(result.tesla.last_commanded_at));
+        setText("error", result.tesla.last_error || "Aucune", result.tesla.last_error ? "state-error" : "state-ok");
+      }
       await refresh();
     }
 
@@ -1469,7 +1485,7 @@ def create_app(
         return jsonify(
             {
                 "server_time": datetime.utcnow().isoformat() + "Z",
-                "tesla": snapshot.to_dict(),
+                "tesla": tesla_controller.get_status_payload(),
             }
         )
 
