@@ -33,6 +33,7 @@ class TimeWindow:
 @dataclass(slots=True)
 class LoopStatus:
     running: bool
+    automation_enabled: bool
     poll_interval_seconds: int
     current_interval_seconds: int
     schedule_mode: str
@@ -100,6 +101,7 @@ class ControlLoop:
         self._idle_poll_interval_seconds = config.idle_poll_interval_seconds
         self._status = LoopStatus(
             running=False,
+            automation_enabled=True,
             poll_interval_seconds=self._active_poll_interval_seconds,
             current_interval_seconds=self._active_poll_interval_seconds,
             schedule_mode="active_day",
@@ -176,6 +178,18 @@ class ControlLoop:
             "tesla_status_interval_seconds": current_tesla,
         }
 
+    def set_automation_enabled(self, enabled: bool) -> dict[str, Any]:
+        with self._lock:
+            changed = self._status.automation_enabled != bool(enabled)
+            self._status.automation_enabled = bool(enabled)
+            if changed:
+                self._start_candidate_since = None
+                self._stop_candidate_since = None
+            automation_enabled = self._status.automation_enabled
+        return {
+            "automation_enabled": automation_enabled,
+        }
+
     def refresh_now(self) -> dict[str, Any]:
         with self._cycle_lock:
             started_at = self._now()
@@ -215,6 +229,11 @@ class ControlLoop:
         while not self._stop_event.is_set():
             started_at = self._now()
             schedule_mode, wait_seconds = self._get_schedule_mode()
+            with self._lock:
+                automation_enabled = self._status.automation_enabled
+            if not automation_enabled:
+                schedule_mode = "manual_override"
+                wait_seconds = self._active_poll_interval_seconds
             solar_snapshot: SolarSnapshot | None = None
             tesla_snapshot: TeslaSnapshot | None = None
             desired_amps: int | None = None
@@ -237,7 +256,15 @@ class ControlLoop:
                     solar_snapshot = self.solar_monitor.read_snapshot()
                     tesla_snapshot = self.tesla_controller.read_status()
                     desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
-                    decision = self._apply_decision(desired_amps, tesla_snapshot)
+                    if automation_enabled:
+                        decision = self._apply_decision(desired_amps, tesla_snapshot)
+                    else:
+                        decision = {
+                            "applied_amps": tesla_snapshot.charging_amps,
+                            "reason": "manual_override",
+                            "command": None,
+                            "command_result": None,
+                        }
 
                     with self._lock:
                         self._status.running = True

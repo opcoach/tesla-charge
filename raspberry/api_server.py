@@ -154,6 +154,29 @@ DASHBOARD_HTML = """
       border-color: var(--accent);
       color: var(--accent);
     }
+    .automation-toggle {
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.95);
+      color: var(--accent);
+      border-radius: 999px;
+      min-width: 58px;
+      height: 26px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.74rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .automation-toggle.is-off {
+      color: var(--danger);
+    }
+    .automation-toggle:hover {
+      border-color: var(--accent);
+    }
     .timing select:not(.cadence-select) {
       background: transparent;
       border: 0;
@@ -429,6 +452,11 @@ DASHBOARD_HTML = """
         <button class="pill-action" type="button" data-refresh-action="tesla" title="Forcer une lecture Tesla maintenant">↻</button>
         <span class="pill-hint">dans <span id="tesla-countdown">--</span></span>
       </div>
+      <div class="pill">
+        <span>Auto</span>
+        <button id="automation-toggle" class="automation-toggle" type="button" aria-pressed="true" title="Basculer entre régulation automatique et reprise manuelle">ON</button>
+        <span class="pill-hint" id="automation-hint">régulation automatique</span>
+      </div>
       <div class="pill">Mode : <span id="schedule-mode">--</span></div>
     </div>
 
@@ -601,6 +629,7 @@ DASHBOARD_HTML = """
       <code>GET /tesla</code>,
       <code>GET /status</code>,
       <code>GET /timeline</code>,
+      <code>POST /settings/automation</code>,
       <code>POST /settings/cadences</code>,
       <code>POST /actions/refresh/loop</code>,
       <code>POST /actions/refresh/tesla</code>,
@@ -632,6 +661,8 @@ DASHBOARD_HTML = """
     const chartWindowSelect = document.getElementById("chart-window");
     const loopIntervalSelect = document.getElementById("loop-interval-select");
     const teslaIntervalSelect = document.getElementById("tesla-interval-select");
+    const automationToggle = document.getElementById("automation-toggle");
+    const automationHint = document.getElementById("automation-hint");
     const storedWindow = localStorage.getItem("tesla-charge-chart-window");
     if (storedWindow && ["900", "1800", "3600"].includes(storedWindow)) {
       chartWindowSelect.value = storedWindow;
@@ -698,6 +729,21 @@ DASHBOARD_HTML = """
       }).format(date);
     }
 
+    function formatScheduleMode(mode) {
+      switch (mode) {
+        case "active_day":
+          return "actif";
+        case "idle_night":
+          return "veille";
+        case "manual_override":
+          return "manuel";
+        case "manual_refresh":
+          return "rafraîchissement";
+        default:
+          return mode || "--";
+      }
+    }
+
     function setText(id, value, className) {
       const node = document.getElementById(id);
       if (!node.dataset.baseClass) {
@@ -722,6 +768,23 @@ DASHBOARD_HTML = """
       const angle = Math.max(0, Math.min(360, progress * 360));
       orb.style.background = `conic-gradient(var(--accent) 0deg ${angle}deg, rgba(0, 122, 90, 0.12) ${angle}deg 360deg)`;
       orb.style.boxShadow = `0 0 0 1px rgba(255, 253, 248, 0.95) inset, 0 0 0 ${Math.round(progress * 4)}px rgba(0, 122, 90, ${0.08 * (1 - progress)})`;
+    }
+
+    function updateAutomationToggle(status) {
+      if (!automationToggle) return;
+      const enabled = status?.loop?.automation_enabled !== false;
+      automationToggle.textContent = enabled ? "ON" : "OFF";
+      automationToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
+      automationToggle.classList.toggle("is-off", !enabled);
+      automationToggle.title = enabled
+        ? "Régulation automatique active. Cliquer pour passer en reprise manuelle."
+        : "Reprise manuelle active. Cliquer pour réactiver la régulation automatique.";
+      if (automationHint) {
+        automationHint.textContent = enabled
+          ? "régulation automatique"
+          : "reprise manuelle";
+        automationHint.className = enabled ? "pill-hint state-ok" : "pill-hint state-warn";
+      }
     }
 
     function currentWindowSeconds() {
@@ -1040,6 +1103,14 @@ DASHBOARD_HTML = """
       await refresh();
     }
 
+    async function setAutomationEnabled(enabled) {
+      const result = await postJson("/settings/automation", { enabled });
+      if (automationToggle) {
+        automationToggle.dataset.enabled = String(result.automation_enabled !== false);
+      }
+      await refresh();
+    }
+
     function updateLiveTimers() {
       const status = dashboardState.status;
       if (!status) return;
@@ -1103,14 +1174,15 @@ DASHBOARD_HTML = """
         setText("updated-at", fmtDate(loop.last_run_at));
         setText("last-commanded-at", fmtDate(data.tesla.last_commanded_at));
         setText("last-commanded-amps", fmtAmps(data.tesla.last_commanded_amps));
-        setText("vehicle-name", tesla.vehicle_name || "--");
-        setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
-        setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
-        setText("schedule-mode", loop.schedule_mode || "--");
-        if (loopIntervalSelect) {
-          loopIntervalSelect.value = String(loopIntervalSeconds);
-          syncCadenceSelectClass(loopIntervalSelect);
-        }
+      setText("vehicle-name", tesla.vehicle_name || "--");
+      setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
+      setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
+      setText("schedule-mode", formatScheduleMode(loop.schedule_mode));
+      updateAutomationToggle(data);
+      if (loopIntervalSelect) {
+        loopIntervalSelect.value = String(loopIntervalSeconds);
+        syncCadenceSelectClass(loopIntervalSelect);
+      }
         if (teslaIntervalSelect) {
           teslaIntervalSelect.value = String(teslaIntervalSeconds);
           syncCadenceSelectClass(teslaIntervalSelect);
@@ -1208,6 +1280,19 @@ DASHBOARD_HTML = """
           await applyCadenceChange();
         } catch (error) {
           setText("error", error.message || "Erreur inconnue", "state-error");
+        }
+      });
+    }
+    if (automationToggle) {
+      automationToggle.addEventListener("click", async () => {
+        try {
+          automationToggle.disabled = true;
+          const enabled = dashboardState.status?.loop?.automation_enabled !== false;
+          await setAutomationEnabled(!enabled);
+        } catch (error) {
+          setText("error", error.message || "Erreur inconnue", "state-error");
+        } finally {
+          automationToggle.disabled = false;
         }
       });
     }
@@ -1321,6 +1406,20 @@ def create_app(
                     else None
                 ),
             )
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 400
+        return jsonify(result)
+
+    @app.post("/settings/automation")
+    def update_automation() -> Any:
+        payload = request.get_json(silent=True) or request.form.to_dict() or {}
+        enabled = payload.get("enabled")
+        if isinstance(enabled, str):
+            enabled = enabled.strip().lower() in {"1", "true", "yes", "on"}
+        elif not isinstance(enabled, bool):
+            return jsonify({"error": "Champ enabled obligatoire"}), 400
+        try:
+            result = control_loop.set_automation_enabled(bool(enabled))
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
         return jsonify(result)
