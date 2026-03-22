@@ -279,6 +279,10 @@ class TeslaController:
             "status_refresh_seconds": status_refresh_seconds,
         }
 
+    def peek_snapshot(self) -> TeslaSnapshot | None:
+        with self._lock:
+            return self._last_snapshot
+
     def close(self) -> None:
         return
 

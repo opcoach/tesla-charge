@@ -254,13 +254,15 @@ class ControlLoop:
 
                 with self._cycle_lock:
                     solar_snapshot = self.solar_monitor.read_snapshot()
-                    tesla_snapshot = self.tesla_controller.read_status()
-                    desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
                     if automation_enabled:
+                        tesla_snapshot = self.tesla_controller.read_status()
+                        desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
                         decision = self._apply_decision(desired_amps, tesla_snapshot)
                     else:
+                        tesla_snapshot = None
+                        desired_amps = None
                         decision = {
-                            "applied_amps": tesla_snapshot.charging_amps,
+                            "applied_amps": None,
                             "reason": "manual_override",
                             "command": None,
                             "command_result": None,

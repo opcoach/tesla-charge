@@ -444,13 +444,13 @@ DASHBOARD_HTML = """
         <span>Régulation</span>
         <select id="loop-interval-select" class="cadence-select is-default" data-current="{{ loop_interval_seconds }}" data-default="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
         <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture et une régulation maintenant">↻</button>
-        <span class="pill-hint">dans <span id="loop-countdown">--</span></span>
+        <span class="pill-hint"><span id="loop-countdown">--</span></span>
       </div>
       <div class="pill">
         <span>Tesla</span>
         <select id="tesla-interval-select" class="cadence-select is-default" data-current="{{ tesla_refresh_seconds }}" data-default="{{ tesla_refresh_seconds }}" aria-label="Changer la cadence de lecture Tesla"></select>
         <button class="pill-action" type="button" data-refresh-action="tesla" title="Forcer une lecture Tesla maintenant">↻</button>
-        <span class="pill-hint">dans <span id="tesla-countdown">--</span></span>
+        <span class="pill-hint" id="tesla-countdown-wrap"><span id="tesla-countdown">--</span></span>
       </div>
       <div class="pill">
         <span>Auto</span>
@@ -572,7 +572,7 @@ DASHBOARD_HTML = """
         </div>
       </article>
 
-      <article class="card chart-card" data-chart="amps">
+      <article class="card chart-card" data-chart="amps" id="amps-chart-card">
         <div class="chart-head">
           <div>
             <div class="chart-title">
@@ -663,6 +663,8 @@ DASHBOARD_HTML = """
     const teslaIntervalSelect = document.getElementById("tesla-interval-select");
     const automationToggle = document.getElementById("automation-toggle");
     const automationHint = document.getElementById("automation-hint");
+    const teslaCountdownWrap = document.getElementById("tesla-countdown-wrap");
+    const ampsChartCard = document.getElementById("amps-chart-card");
     const storedWindow = localStorage.getItem("tesla-charge-chart-window");
     if (storedWindow && ["900", "1800", "3600"].includes(storedWindow)) {
       chartWindowSelect.value = storedWindow;
@@ -776,6 +778,15 @@ DASHBOARD_HTML = """
       automationToggle.textContent = enabled ? "ON" : "OFF";
       automationToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
       automationToggle.classList.toggle("is-off", !enabled);
+      if (teslaIntervalSelect) {
+        teslaIntervalSelect.disabled = !enabled;
+      }
+      if (teslaCountdownWrap) {
+        teslaCountdownWrap.style.display = enabled ? "" : "none";
+      }
+      if (ampsChartCard) {
+        ampsChartCard.style.display = enabled ? "" : "none";
+      }
       automationToggle.title = enabled
         ? "Régulation automatique active. Cliquer pour passer en reprise manuelle."
         : "Reprise manuelle active. Cliquer pour réactiver la régulation automatique.";
@@ -1118,6 +1129,7 @@ DASHBOARD_HTML = """
       const solar = status.solar?.snapshot || {};
       const tesla = status.tesla?.snapshot || {};
       const loop = status.loop || {};
+      const automationEnabled = loop.automation_enabled !== false;
       const nowMs = Date.now();
       const loopInterval = loop.current_interval_seconds || loop.poll_interval_seconds || refreshMs / 1000;
       const teslaInterval = currentTeslaIntervalSeconds(status);
@@ -1128,7 +1140,11 @@ DASHBOARD_HTML = """
       const teslaTarget = tesla.captured_at ? isoToMs(tesla.captured_at) + (teslaInterval * 1000) : null;
 
       setText("loop-countdown", formatCountdown(loopTarget, nowMs), loopTarget !== null && loopTarget < nowMs ? "state-warn" : "state-ok");
-      setText("tesla-countdown", formatCountdown(teslaTarget, nowMs), teslaTarget !== null && teslaTarget < nowMs ? "state-warn" : "state-ok");
+      if (automationEnabled) {
+        setText("tesla-countdown", formatCountdown(teslaTarget, nowMs), teslaTarget !== null && teslaTarget < nowMs ? "state-warn" : "state-ok");
+      } else {
+        setText("tesla-countdown", "manuel", "state-warn");
+      }
 
       updateRefreshOrb();
     }
@@ -1149,6 +1165,7 @@ DASHBOARD_HTML = """
         const solar = data.solar.snapshot || {};
         const tesla = data.tesla.snapshot || {};
         const loop = data.loop || {};
+        const automationEnabled = loop.automation_enabled !== false;
         const teslaIntervalSeconds = currentTeslaIntervalSeconds(data);
         const loopIntervalSeconds = currentLoopIntervalSeconds(data);
         const samples = Array.isArray(timeline.samples) ? timeline.samples : [];
@@ -1174,15 +1191,15 @@ DASHBOARD_HTML = """
         setText("updated-at", fmtDate(loop.last_run_at));
         setText("last-commanded-at", fmtDate(data.tesla.last_commanded_at));
         setText("last-commanded-amps", fmtAmps(data.tesla.last_commanded_amps));
-      setText("vehicle-name", tesla.vehicle_name || "--");
-      setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
-      setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
-      setText("schedule-mode", formatScheduleMode(loop.schedule_mode));
-      updateAutomationToggle(data);
-      if (loopIntervalSelect) {
-        loopIntervalSelect.value = String(loopIntervalSeconds);
-        syncCadenceSelectClass(loopIntervalSelect);
-      }
+        setText("vehicle-name", tesla.vehicle_name || "--");
+        setText("vehicle-state", tesla.vehicle_state || "--", tesla.vehicle_state === "online" ? "state-ok" : "state-warn");
+        setText("plugged-in", tesla.plugged_in ? "Oui" : "Non", tesla.plugged_in ? "state-ok" : "state-warn");
+        setText("schedule-mode", formatScheduleMode(loop.schedule_mode));
+        updateAutomationToggle(data);
+        if (loopIntervalSelect) {
+          loopIntervalSelect.value = String(loopIntervalSeconds);
+          syncCadenceSelectClass(loopIntervalSelect);
+        }
         if (teslaIntervalSelect) {
           teslaIntervalSelect.value = String(teslaIntervalSeconds);
           syncCadenceSelectClass(teslaIntervalSelect);
@@ -1234,23 +1251,30 @@ DASHBOARD_HTML = """
           tooltip: "Courbe de l'import du réseau: export négatif, import positif. La ligne bleue du zéro correspond à l'équilibre local.",
         });
 
-        renderLineChart(ampsChartId, chooseSamples(samples, ampsWindow), {
-          series: [
-            {
-              color: "var(--accent-2)",
-              value: (sample) => sample.desired_amps,
-            },
-            {
-              color: "var(--accent)",
-              value: (sample) => sample.charging_amps,
-            },
-          ],
-          zeroBaseline: true,
-          yFloor: 0,
-          formatLabel: (value) => `${Math.round(value)} A`,
-          formatTime: fmtTime,
-          tooltip: "Courbe de la consigne calculée et de l'intensité réelle. Si la consigne est au-dessus de l'intensité, la voiture n'a pas encore rattrapé la demande.",
-        });
+        if (automationEnabled) {
+          renderLineChart(ampsChartId, chooseSamples(samples, ampsWindow), {
+            series: [
+              {
+                color: "var(--accent-2)",
+                value: (sample) => sample.desired_amps,
+              },
+              {
+                color: "var(--accent)",
+                value: (sample) => sample.charging_amps,
+              },
+            ],
+            zeroBaseline: true,
+            yFloor: 0,
+            formatLabel: (value) => `${Math.round(value)} A`,
+            formatTime: fmtTime,
+            tooltip: "Courbe de la consigne calculée et de l'intensité réelle. Si la consigne est au-dessus de l'intensité, la voiture n'a pas encore rattrapé la demande.",
+          });
+        } else {
+          const svg = document.getElementById(ampsChartId);
+          if (svg) {
+            clearSvg(svg);
+          }
+        }
       } catch (error) {
         setText("error", error.message || "Erreur inconnue", "state-error");
       }
