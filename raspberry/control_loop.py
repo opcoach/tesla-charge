@@ -15,6 +15,9 @@ from tesla_controller import TeslaController, TeslaProxyUnavailableError, TeslaS
 
 
 LOGGER = logging.getLogger(__name__)
+NET_SMOOTHING_ALPHA = 0.35
+MAX_STEP_UP_AMPS = 4
+MAX_STEP_DOWN_AMPS = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +118,7 @@ class ControlLoop:
         self._history: deque[TimelineSample] = deque()
         self._start_candidate_since: datetime | None = None
         self._stop_candidate_since: datetime | None = None
+        self._smoothed_net_watts: float | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -256,7 +260,13 @@ class ControlLoop:
                     solar_snapshot = self.solar_monitor.read_snapshot()
                     if automation_enabled:
                         tesla_snapshot = self.tesla_controller.read_status()
-                        desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
+                        with self._lock:
+                            previous_applied_amps = self._status.applied_amps
+                        desired_amps = self._calculate_desired_amps(
+                            solar_snapshot,
+                            tesla_snapshot,
+                            previous_applied_amps=previous_applied_amps,
+                        )
                         decision = self._apply_decision(desired_amps, tesla_snapshot)
                     else:
                         tesla_snapshot = None
@@ -424,15 +434,15 @@ class ControlLoop:
         self._start_candidate_since = None
         try:
             start_result = self.tesla_controller.start_charging(source="control_loop")
-            desired_after_start = desired_amps
+            desired_after_start = self.config.charge_start_amps
             set_result = start_result
             command_label = "start"
-            if desired_amps >= self.config.min_amps:
+            if desired_amps >= self.config.charge_start_amps:
                 set_result = self.tesla_controller.set_charging_amps(
-                    desired_amps,
+                    self.config.charge_start_amps,
                     source="control_loop",
                 )
-                desired_after_start = set_result.get("requested_amps", desired_amps)
+                desired_after_start = set_result.get("requested_amps", self.config.charge_start_amps)
                 command_label = "start+set"
         except TeslaProxyUnavailableError:
             return {
@@ -456,12 +466,32 @@ class ControlLoop:
     def _is_confirmed(since: datetime, now: datetime, required_seconds: int) -> bool:
         return (now - since).total_seconds() >= required_seconds
 
-    def _calculate_desired_amps(self, solar_snapshot: SolarSnapshot, tesla_snapshot: TeslaSnapshot) -> int:
+    def _calculate_desired_amps(
+        self,
+        solar_snapshot: SolarSnapshot,
+        tesla_snapshot: TeslaSnapshot,
+        *,
+        previous_applied_amps: int | None = None,
+    ) -> int:
         current_amps = tesla_snapshot.charging_amps or 0
+        baseline_amps = previous_applied_amps if previous_applied_amps is not None else current_amps
         net_watts = solar_snapshot.export_watts - solar_snapshot.import_watts
-        delta_amps = math.floor(net_watts / self.config.nominal_voltage)
-        raw_amps = current_amps + delta_amps
-        return max(0, min(self.config.max_amps, raw_amps))
+        if self._smoothed_net_watts is None:
+            self._smoothed_net_watts = float(net_watts)
+        else:
+            self._smoothed_net_watts = (
+                NET_SMOOTHING_ALPHA * float(net_watts)
+                + (1.0 - NET_SMOOTHING_ALPHA) * self._smoothed_net_watts
+            )
+        delta_amps = math.floor(self._smoothed_net_watts / self.config.nominal_voltage)
+        raw_amps = baseline_amps + delta_amps
+        desired = max(0, min(self.config.max_amps, raw_amps))
+        if baseline_amps > 0:
+            if desired > baseline_amps + MAX_STEP_UP_AMPS:
+                desired = baseline_amps + MAX_STEP_UP_AMPS
+            if desired < baseline_amps - MAX_STEP_DOWN_AMPS:
+                desired = baseline_amps - MAX_STEP_DOWN_AMPS
+        return desired
 
     def _record_history_sample(
         self,
