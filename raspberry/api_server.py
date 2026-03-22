@@ -111,6 +111,8 @@ DASHBOARD_HTML = """
       color: var(--muted);
       font-size: 0.76rem;
       padding: 7px 10px;
+      min-width: 260px;
+      white-space: nowrap;
     }
     .pill-hint {
       color: var(--muted);
@@ -382,6 +384,7 @@ DASHBOARD_HTML = """
       }
       .timing .pill {
         width: 100%;
+        min-width: 0;
         justify-content: space-between;
       }
       .summary-row {
@@ -441,7 +444,13 @@ DASHBOARD_HTML = """
     </div>
     <div class="timing">
       <div class="pill">
-        <span>Régulation</span>
+        <span>Auto</span>
+        <button id="automation-toggle" class="automation-toggle" type="button" aria-pressed="true" title="Basculer entre régulation automatique et reprise manuelle">ON</button>
+        <span class="pill-hint" id="automation-hint">régulation automatique</span>
+      </div>
+      <div class="pill">Mode : <span id="schedule-mode">--</span></div>
+      <div class="pill">
+        <span>Solaire</span>
         <select id="loop-interval-select" class="cadence-select is-default" data-current="{{ loop_interval_seconds }}" data-default="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
         <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture et une régulation maintenant">↻</button>
         <span class="pill-hint"><span id="loop-countdown">--</span></span>
@@ -452,12 +461,6 @@ DASHBOARD_HTML = """
         <button class="pill-action" type="button" data-refresh-action="tesla" title="Forcer une lecture Tesla maintenant">↻</button>
         <span class="pill-hint" id="tesla-countdown-wrap"><span id="tesla-countdown">--</span></span>
       </div>
-      <div class="pill">
-        <span>Auto</span>
-        <button id="automation-toggle" class="automation-toggle" type="button" aria-pressed="true" title="Basculer entre régulation automatique et reprise manuelle">ON</button>
-        <span class="pill-hint" id="automation-hint">régulation automatique</span>
-      </div>
-      <div class="pill">Mode : <span id="schedule-mode">--</span></div>
     </div>
 
     <section class="summary-row">

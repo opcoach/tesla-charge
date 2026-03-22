@@ -260,6 +260,30 @@ class ControlLoop:
                     solar_snapshot = self.solar_monitor.read_snapshot()
                     if automation_enabled:
                         tesla_snapshot = self.tesla_controller.read_status()
+                        if not tesla_snapshot.plugged_in:
+                            self.set_automation_enabled(False)
+                            automation_enabled = False
+                            schedule_mode = "manual_override"
+                            desired_amps = None
+                            decision = {
+                                "applied_amps": None,
+                                "reason": "vehicle_unplugged",
+                                "command": None,
+                                "command_result": None,
+                            }
+                            with self._lock:
+                                self._status.running = True
+                                self._status.current_interval_seconds = wait_seconds
+                                self._status.schedule_mode = schedule_mode
+                                self._status.desired_amps = None
+                                self._status.applied_amps = None
+                                self._status.last_reason = "vehicle_unplugged"
+                                self._status.last_run_at = started_at.isoformat()
+                                self._status.last_success_at = started_at.isoformat()
+                                self._status.last_error = None
+                            LOGGER.info("Automatisation désactivée: véhicule débranché")
+                            self._stop_event.wait(wait_seconds)
+                            continue
                         with self._lock:
                             previous_applied_amps = self._status.applied_amps
                         desired_amps = self._calculate_desired_amps(
