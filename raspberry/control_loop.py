@@ -172,9 +172,9 @@ class ControlLoop:
                 self._active_poll_interval_seconds = max(1, int(active_poll_interval_seconds))
                 self._status.poll_interval_seconds = self._active_poll_interval_seconds
             if tesla_status_interval_seconds is not None:
-                self.tesla_controller.set_status_refresh_seconds(
-                    max(1, int(tesla_status_interval_seconds))
-                )
+                tesla_seconds = max(1, int(tesla_status_interval_seconds))
+                self.tesla_controller.set_status_refresh_seconds(tesla_seconds)
+                self.tesla_controller.set_detail_refresh_seconds(max(900, tesla_seconds * 4))
             current_poll = self._active_poll_interval_seconds
             current_tesla = self.tesla_controller.get_status_payload()["status_refresh_seconds"]
         return {

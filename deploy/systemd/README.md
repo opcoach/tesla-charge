@@ -31,6 +31,7 @@ Dans `/etc/default/tesla-charge`, remplace au minimum :
 - `TESLA_CHARGE_START_AMPS` et `TESLA_CHARGE_STOP_AMPS` si tu veux ajuster les seuils de démarrage et d'arrêt
 - `TESLA_CHARGE_START_CONFIRM_SEC` et `TESLA_CHARGE_STOP_CONFIRM_SEC` si tu veux ajuster les temporisations
 - `TIMELINE_WINDOW_SEC` si tu veux garder plus ou moins d'historique en mémoire pour le dashboard
+- `TESLA_STATUS_INTERVAL_SEC` et `TESLA_DETAIL_INTERVAL_SEC` si tu veux ajuster la fréquence des lectures Tesla et garder le coût sous contrôle
 
 Vérifie aussi le fichier `/etc/systemd/system/tesla-charge.service` si ton utilisateur Raspberry n’est pas `olivier`.
 
@@ -132,6 +133,8 @@ TESLA_CHARGE_START_AMPS=6
 TESLA_CHARGE_STOP_AMPS=5
 TESLA_CHARGE_START_CONFIRM_SEC=60
 TESLA_CHARGE_STOP_CONFIRM_SEC=90
+TESLA_STATUS_INTERVAL_SEC=900
+TESLA_DETAIL_INTERVAL_SEC=3600
 TIMELINE_WINDOW_SEC=3600
 ```
 

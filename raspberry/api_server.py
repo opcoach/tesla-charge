@@ -199,6 +199,12 @@ DASHBOARD_HTML = """
       grid-template-columns: repeat(3, minmax(0, 1fr));
       margin-bottom: 24px;
     }
+    .usage-row {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 24px;
+    }
     .card {
       background: var(--card);
       border: 1px solid var(--line);
@@ -234,6 +240,12 @@ DASHBOARD_HTML = """
       display: grid;
       gap: 14px;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .usage-summary {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: -8px;
+      margin-bottom: 24px;
     }
     .meta-line {
       display: flex;
@@ -393,6 +405,9 @@ DASHBOARD_HTML = """
       .sync-row {
         grid-template-columns: 1fr;
       }
+      .usage-row {
+        grid-template-columns: 1fr;
+      }
       .chart-row {
         grid-template-columns: 1fr;
       }
@@ -523,6 +538,32 @@ DASHBOARD_HTML = """
       </article>
     </section>
 
+    <section class="usage-row">
+      <article class="card">
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Données Tesla</div>
+          </div>
+          <span class="info-icon" title="Requêtes billables du mois en cours sur les endpoints de données Tesla. Estimation calculée à partir du tarif indicatif Tesla: 500 requêtes / 1 €.">i</span>
+        </div>
+        <div class="value" id="data-requests">--</div>
+        <div class="meta-line"><span>Coût estimé</span><strong id="data-cost">--</strong></div>
+        <div class="meta-line"><span>Tarif indicatif</span><strong>500 req / 1 €</strong></div>
+      </article>
+      <article class="card">
+        <div class="card-top">
+          <div class="card-title">
+            <div class="label">Commandes Tesla</div>
+          </div>
+          <span class="info-icon" title="Requêtes billables du mois en cours sur les commandes signées Tesla. Estimation calculée à partir du tarif indicatif Tesla: 1000 requêtes / 1 €.">i</span>
+        </div>
+        <div class="value" id="command-requests">--</div>
+        <div class="meta-line"><span>Coût estimé</span><strong id="command-cost">--</strong></div>
+        <div class="meta-line"><span>Tarif indicatif</span><strong>1000 req / 1 €</strong></div>
+      </article>
+    </section>
+    <div class="usage-summary" id="usage-summary">--</div>
+
     <div class="chart-controls">
       <div class="pill">
         Fenêtre courbe
@@ -645,7 +686,7 @@ DASHBOARD_HTML = """
     const historyWindowSeconds = {{ history_window_seconds }};
     const teslaRefreshSeconds = {{ tesla_refresh_seconds }};
     const zoomWindowSeconds = 600;
-    const cadenceOptions = [5, 10, 15, 30, 60, 120, 300];
+    const cadenceOptions = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
     const powerChartId = "power-chart";
     const gridChartId = "grid-chart";
     const ampsChartId = "amps-chart";
@@ -715,6 +756,20 @@ DASHBOARD_HTML = """
       return `${value} %`;
     }
 
+    function fmtCount(value) {
+      if (value === null || value === undefined) return "--";
+      return `${new Intl.NumberFormat("fr-FR").format(value)} requêtes`;
+    }
+
+    function fmtEuro(value) {
+      if (value === null || value === undefined) return "--";
+      return new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 2,
+      }).format(value);
+    }
+
     function fmtDate(value) {
       if (!value) return "--";
       const date = new Date(value);
@@ -765,6 +820,19 @@ DASHBOARD_HTML = """
         setText("last-commanded-at", fmtDate(statusPayload.last_commanded_at));
         setText("error", statusPayload.last_error || "Aucune", statusPayload.last_error ? "state-error" : "state-ok");
       }
+    }
+
+    function renderTeslaUsage(usage) {
+      setText("data-requests", fmtCount(usage?.counts?.data));
+      setText("data-cost", fmtEuro(usage?.costs_eur?.data));
+      setText("command-requests", fmtCount(usage?.counts?.commands));
+      setText("command-cost", fmtEuro(usage?.costs_eur?.commands));
+      setText(
+        "usage-summary",
+        usage?.month
+          ? `Mois ${usage.month} · brut ${fmtEuro(usage?.costs_eur?.gross ?? null)} · net après crédit Tesla ${fmtEuro(usage?.costs_eur?.net ?? null)}`
+          : "--",
+      );
     }
 
     function setText(id, value, className) {
@@ -1139,6 +1207,7 @@ DASHBOARD_HTML = """
         dashboardState.status.tesla = result.tesla;
         const snapshot = result.tesla.snapshot || {};
         renderTeslaSnapshot(snapshot, result.tesla);
+        renderTeslaUsage(result.tesla.usage || {});
         updateLiveTimers();
         return;
       }
@@ -1195,6 +1264,7 @@ DASHBOARD_HTML = """
 
         const solar = data.solar.snapshot || {};
         const tesla = data.tesla.snapshot || {};
+        const usage = data.tesla.usage || {};
         const loop = data.loop || {};
         const automationEnabled = loop.automation_enabled !== false;
         const teslaIntervalSeconds = currentTeslaIntervalSeconds(data);
@@ -1219,6 +1289,7 @@ DASHBOARD_HTML = """
         setText("decision", loop.last_reason || "--");
         setText("updated-at", fmtDate(loop.last_run_at));
         setText("schedule-mode", formatScheduleMode(loop.schedule_mode));
+        renderTeslaUsage(usage);
         updateAutomationToggle(data);
         if (loopIntervalSelect) {
           loopIntervalSelect.value = String(loopIntervalSeconds);

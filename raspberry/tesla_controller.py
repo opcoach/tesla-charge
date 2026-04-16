@@ -18,6 +18,10 @@ LOGGER = logging.getLogger(__name__)
 CONNECTED_STATES = {"Charging", "Stopped", "Complete", "Starting", "NoPower"}
 DISCONNECTED_CABLES = {None, "", "<invalid>", "NoCable"}
 ERROR_LOG_THROTTLE_SECONDS = 30
+DATA_REQUESTS_PER_EUR = 500
+COMMAND_REQUESTS_PER_EUR = 1000
+WAKE_REQUESTS_PER_EUR = 50
+MONTHLY_DISCOUNT_EUR = 10.0
 
 
 @dataclass(slots=True)
@@ -56,14 +60,48 @@ class TokenState:
     client_id: str | None
 
 
+@dataclass(slots=True)
+class UsageStats:
+    month_key: str
+    data_requests: int = 0
+    command_requests: int = 0
+    wake_requests: int = 0
+    updated_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data_cost = self.data_requests / DATA_REQUESTS_PER_EUR
+        command_cost = self.command_requests / COMMAND_REQUESTS_PER_EUR
+        wake_cost = self.wake_requests / WAKE_REQUESTS_PER_EUR
+        gross_cost = data_cost + command_cost + wake_cost
+        net_cost = max(0.0, gross_cost - MONTHLY_DISCOUNT_EUR)
+        return {
+            "month": self.month_key,
+            "counts": {
+                "data": self.data_requests,
+                "commands": self.command_requests,
+                "wakes": self.wake_requests,
+            },
+            "costs_eur": {
+                "data": data_cost,
+                "commands": command_cost,
+                "wakes": wake_cost,
+                "gross": gross_cost,
+                "discount": MONTHLY_DISCOUNT_EUR,
+                "net": net_cost,
+            },
+            "updated_at": self.updated_at,
+        }
+
+
 class TeslaController:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._vehicle: dict[str, Any] | None = None
         self._token_state: TokenState | None = None
         self._last_snapshot: TeslaSnapshot | None = None
         self._last_snapshot_at: datetime | None = None
+        self._last_detail_snapshot_at: datetime | None = None
         self._last_error: str | None = None
         self._last_commanded_amps: int | None = None
         self._last_commanded_at: datetime | None = None
@@ -71,6 +109,11 @@ class TeslaController:
         self._last_logged_error_at: datetime | None = None
         self._proxy_unavailable_until: datetime | None = None
         self._status_refresh_seconds = self.config.tesla_status_interval_seconds
+        self._detail_refresh_seconds = self.config.tesla_detail_interval_seconds
+        self._usage_path = Path(self.config.tesla_refresh_token_file).with_name(
+            "tesla-usage.json"
+        )
+        self._usage_stats = self._load_usage_stats()
 
     def read_status(self, force_refresh: bool = False) -> TeslaSnapshot:
         try:
@@ -81,8 +124,9 @@ class TeslaController:
                 vehicle = self._ensure_vehicle()
                 summary = self._get_vehicle_summary(vehicle["vin"])
                 vehicle_data = None
-                if summary.get("state") == "online":
+                if summary.get("state") == "online" and self._should_refresh_vehicle_data(force_refresh):
                     vehicle_data = self._get_vehicle_data(vehicle["vin"])
+                    self._last_detail_snapshot_at = datetime.now(timezone.utc)
 
                 merged = self._merge_vehicle(vehicle, summary, vehicle_data)
                 snapshot = self._snapshot_from_vehicle(merged)
@@ -101,6 +145,13 @@ class TeslaController:
         with self._lock:
             self._status_refresh_seconds = max(1, int(seconds))
 
+    def set_detail_refresh_seconds(self, seconds: int) -> None:
+        with self._lock:
+            self._detail_refresh_seconds = max(
+                self._status_refresh_seconds,
+                max(1, int(seconds)),
+            )
+
     def set_charging_amps(self, amps: int, source: str = "manual") -> dict[str, Any]:
         clamped_amps = max(self.config.min_amps, min(self.config.max_amps, int(amps)))
         try:
@@ -110,8 +161,11 @@ class TeslaController:
                 if summary.get("state") != "online":
                     raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
 
-                vehicle_data = self._get_vehicle_data(vehicle["vin"])
-                merged = self._merge_vehicle(vehicle, summary, vehicle_data)
+                merged = self._merge_vehicle(vehicle, summary, None)
+                if self._should_refresh_vehicle_data(force_refresh=False):
+                    vehicle_data = self._get_vehicle_data(vehicle["vin"])
+                    self._last_detail_snapshot_at = datetime.now(timezone.utc)
+                    merged = self._merge_vehicle(vehicle, summary, vehicle_data)
                 snapshot_before = self._snapshot_from_vehicle(merged)
                 if not snapshot_before.plugged_in:
                     raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
@@ -175,8 +229,11 @@ class TeslaController:
                 if summary.get("state") != "online":
                     raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
 
-                vehicle_data = self._get_vehicle_data(vehicle["vin"])
-                merged = self._merge_vehicle(vehicle, summary, vehicle_data)
+                merged = self._merge_vehicle(vehicle, summary, None)
+                if self._should_refresh_vehicle_data(force_refresh=False):
+                    vehicle_data = self._get_vehicle_data(vehicle["vin"])
+                    self._last_detail_snapshot_at = datetime.now(timezone.utc)
+                    merged = self._merge_vehicle(vehicle, summary, vehicle_data)
                 snapshot_before = self._snapshot_from_vehicle(merged)
                 if not snapshot_before.plugged_in:
                     raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
@@ -223,8 +280,11 @@ class TeslaController:
                 if summary.get("state") != "online":
                     raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
 
-                vehicle_data = self._get_vehicle_data(vehicle["vin"])
-                merged = self._merge_vehicle(vehicle, summary, vehicle_data)
+                merged = self._merge_vehicle(vehicle, summary, None)
+                if self._should_refresh_vehicle_data(force_refresh=False):
+                    vehicle_data = self._get_vehicle_data(vehicle["vin"])
+                    self._last_detail_snapshot_at = datetime.now(timezone.utc)
+                    merged = self._merge_vehicle(vehicle, summary, vehicle_data)
                 snapshot_before = self._snapshot_from_vehicle(merged)
                 if not snapshot_before.plugged_in:
                     raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
@@ -270,6 +330,8 @@ class TeslaController:
             last_commanded_amps = self._last_commanded_amps
             last_commanded_at = self._last_commanded_at.isoformat() if self._last_commanded_at else None
             status_refresh_seconds = self._status_refresh_seconds
+            detail_refresh_seconds = self._detail_refresh_seconds
+            usage = self._usage_stats.to_dict()
         return {
             "available": snapshot is not None,
             "snapshot": snapshot,
@@ -277,6 +339,8 @@ class TeslaController:
             "last_commanded_amps": last_commanded_amps,
             "last_commanded_at": last_commanded_at,
             "status_refresh_seconds": status_refresh_seconds,
+            "detail_refresh_seconds": detail_refresh_seconds,
+            "usage": usage,
         }
 
     def peek_snapshot(self) -> TeslaSnapshot | None:
@@ -426,6 +490,8 @@ class TeslaController:
                 f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
             ) from exc
 
+        if response.status_code < 500:
+            self._record_usage("commands")
         if response.status_code == 401:
             access_token = self._refresh_access_token(force=True)
             try:
@@ -447,6 +513,8 @@ class TeslaController:
                     f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
                 ) from exc
 
+        if response.status_code < 500:
+            self._record_usage("commands")
         response.raise_for_status()
         self._proxy_unavailable_until = None
         payload = response.json()
@@ -484,6 +552,8 @@ class TeslaController:
             timeout=self.config.requests_timeout_seconds,
         )
 
+        if response.status_code < 500:
+            self._record_usage("data")
         if response.status_code == 401:
             access_token = self._refresh_access_token(force=True)
             response = requests.request(
@@ -493,8 +563,69 @@ class TeslaController:
                 timeout=self.config.requests_timeout_seconds,
             )
 
+        if response.status_code < 500:
+            self._record_usage("data")
         response.raise_for_status()
         return response.json()
+
+    def _should_refresh_vehicle_data(self, force_refresh: bool) -> bool:
+        if force_refresh:
+            return True
+        if self._last_detail_snapshot_at is None:
+            return True
+        return (
+            datetime.now(timezone.utc) - self._last_detail_snapshot_at
+        ) >= timedelta(seconds=self._detail_refresh_seconds)
+
+    def _record_usage(self, category: str) -> None:
+        now = datetime.now(timezone.utc)
+        month_key = now.strftime("%Y-%m")
+        with self._lock:
+            if self._usage_stats.month_key != month_key:
+                self._usage_stats = UsageStats(month_key=month_key)
+            if category == "data":
+                self._usage_stats.data_requests += 1
+            elif category == "commands":
+                self._usage_stats.command_requests += 1
+            elif category == "wakes":
+                self._usage_stats.wake_requests += 1
+            self._usage_stats.updated_at = now.isoformat()
+            self._save_usage_stats_locked()
+
+    def _load_usage_stats(self) -> UsageStats:
+        month_key = datetime.now(timezone.utc).strftime("%Y-%m")
+        if not self._usage_path.is_file():
+            return UsageStats(month_key=month_key)
+        try:
+            with self._usage_path.open(encoding="utf-8") as infile:
+                payload = json.load(infile)
+        except (OSError, ValueError):
+            return UsageStats(month_key=month_key)
+        if not isinstance(payload, dict):
+            return UsageStats(month_key=month_key)
+        if payload.get("month") != month_key:
+            return UsageStats(month_key=month_key)
+        return UsageStats(
+            month_key=month_key,
+            data_requests=self._to_optional_int(payload.get("data_requests")) or 0,
+            command_requests=self._to_optional_int(payload.get("command_requests")) or 0,
+            wake_requests=self._to_optional_int(payload.get("wake_requests")) or 0,
+            updated_at=payload.get("updated_at") if isinstance(payload.get("updated_at"), str) else None,
+        )
+
+    def _save_usage_stats_locked(self) -> None:
+        payload = {
+            "month": self._usage_stats.month_key,
+            "data_requests": self._usage_stats.data_requests,
+            "command_requests": self._usage_stats.command_requests,
+            "wake_requests": self._usage_stats.wake_requests,
+            "updated_at": self._usage_stats.updated_at,
+        }
+        try:
+            with self._usage_path.open("w", encoding="utf-8") as outfile:
+                json.dump(payload, outfile, ensure_ascii=False, indent=2)
+        except OSError:
+            LOGGER.warning("Impossible de sauvegarder les statistiques Tesla dans %s", self._usage_path)
 
     def _ensure_access_token(self) -> str:
         if not self.config.tesla_client_id:

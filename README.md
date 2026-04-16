@@ -88,7 +88,8 @@ La boucle passe en veille hors plage de jour, avec un réveil plus rare toutes l
 - `APP_TIMEZONE` : défaut `Europe/Paris`
 - `CONTROL_INTERVAL_SEC` : défaut `5`
 - `CONTROL_IDLE_INTERVAL_SEC` : défaut `900`
-- `TESLA_STATUS_INTERVAL_SEC` : défaut `30`
+- `TESLA_STATUS_INTERVAL_SEC` : défaut `900`
+- `TESLA_DETAIL_INTERVAL_SEC` : défaut `3600`
 - `TESLA_PROXY_RETRY_SEC` : défaut `60`
 - `TESLA_NOMINAL_VOLTAGE` : défaut `220`
 - `TESLA_CHARGE_START_AMPS` : défaut `6`
@@ -233,6 +234,8 @@ TESLA_CHARGE_STOP_AMPS=5
 TESLA_CHARGE_START_CONFIRM_SEC=60
 TESLA_CHARGE_STOP_CONFIRM_SEC=90
 TESLA_NOMINAL_VOLTAGE=220
+TESLA_STATUS_INTERVAL_SEC=900
+TESLA_DETAIL_INTERVAL_SEC=3600
 ```
 
 Vérifier le service principal :
@@ -259,6 +262,8 @@ Le tableau de bord affiche désormais :
 
 - le temps restant avant la prochaine régulation ;
 - le temps restant avant la prochaine lecture Tesla ;
+- deux indicateurs d'usage Tesla, séparant les requêtes de données et les commandes avec coût estimé ;
+- ces compteurs sont persistés localement dans `tesla-usage.json` pour conserver le mois en cours après un redémarrage ;
 - un graphe puissance ;
 - un graphe réseau séparé ;
 - un graphe Tesla avec zoom ;
