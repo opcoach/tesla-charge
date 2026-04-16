@@ -102,6 +102,8 @@ class ControlLoop:
         )
         self._active_poll_interval_seconds = config.poll_interval_seconds
         self._idle_poll_interval_seconds = config.idle_poll_interval_seconds
+        self._active_tesla_interval_seconds = config.tesla_status_interval_seconds
+        self._idle_tesla_interval_seconds = config.tesla_idle_status_interval_seconds
         self._status = LoopStatus(
             running=False,
             automation_enabled=True,
@@ -259,7 +261,21 @@ class ControlLoop:
                 with self._cycle_lock:
                     solar_snapshot = self.solar_monitor.read_snapshot()
                     if automation_enabled:
-                        tesla_snapshot = self.tesla_controller.read_status()
+                        cached_tesla = self.tesla_controller.peek_snapshot()
+                        refresh_tesla, include_vehicle_data = self._should_refresh_tesla_snapshot(
+                            solar_snapshot,
+                            cached_tesla,
+                        )
+                        if refresh_tesla:
+                            tesla_snapshot = self.tesla_controller.read_status(
+                                include_vehicle_data=include_vehicle_data,
+                            )
+                        else:
+                            tesla_snapshot = cached_tesla
+                        if tesla_snapshot is None:
+                            tesla_snapshot = self.tesla_controller.read_status(
+                                include_vehicle_data=False,
+                            )
                         if not tesla_snapshot.plugged_in:
                             self.set_automation_enabled(False)
                             automation_enabled = False
@@ -516,6 +532,44 @@ class ControlLoop:
             if desired < baseline_amps - MAX_STEP_DOWN_AMPS:
                 desired = baseline_amps - MAX_STEP_DOWN_AMPS
         return desired
+
+    def _should_refresh_tesla_snapshot(
+        self,
+        solar_snapshot: SolarSnapshot,
+        tesla_snapshot: TeslaSnapshot | None,
+    ) -> tuple[bool, bool]:
+        if tesla_snapshot is None:
+            return True, False
+
+        snapshot_age = self._snapshot_age_seconds(tesla_snapshot.captured_at)
+        if snapshot_age is None:
+            return True, False
+
+        if self._is_charging(tesla_snapshot):
+            if snapshot_age >= self._active_tesla_interval_seconds:
+                return True, False
+            return False, False
+
+        start_threshold_watts = self.config.charge_start_amps * self.config.nominal_voltage
+        if solar_snapshot.export_watts >= start_threshold_watts:
+            if snapshot_age >= self._active_tesla_interval_seconds:
+                return True, False
+            return False, False
+
+        if snapshot_age >= self._idle_tesla_interval_seconds:
+            return True, False
+        return False, False
+
+    @staticmethod
+    def _snapshot_age_seconds(captured_at: str) -> int | None:
+        try:
+            captured = datetime.fromisoformat(captured_at)
+        except ValueError:
+            return None
+        if captured.tzinfo is None:
+            captured = captured.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - captured.astimezone(timezone.utc)
+        return max(0, int(delta.total_seconds()))
 
     def _record_history_sample(
         self,

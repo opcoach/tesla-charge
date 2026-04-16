@@ -39,6 +39,7 @@ class AppConfig:
     poll_interval_seconds: int
     idle_poll_interval_seconds: int
     tesla_status_interval_seconds: int
+    tesla_idle_status_interval_seconds: int
     tesla_detail_interval_seconds: int
     tesla_proxy_retry_seconds: int
     nominal_voltage: int
@@ -92,6 +93,10 @@ class AppConfig:
             poll_interval_seconds,
             _get_int("TESLA_STATUS_INTERVAL_SEC", 900),
         )
+        tesla_idle_status_interval_seconds = max(
+            tesla_status_interval_seconds,
+            _get_int("TESLA_IDLE_STATUS_INTERVAL_SEC", 3600),
+        )
         tesla_detail_interval_seconds = max(
             tesla_status_interval_seconds,
             _get_int("TESLA_DETAIL_INTERVAL_SEC", 3600),
@@ -139,6 +144,7 @@ class AppConfig:
             poll_interval_seconds=poll_interval_seconds,
             idle_poll_interval_seconds=idle_poll_interval_seconds,
             tesla_status_interval_seconds=tesla_status_interval_seconds,
+            tesla_idle_status_interval_seconds=tesla_idle_status_interval_seconds,
             tesla_detail_interval_seconds=tesla_detail_interval_seconds,
             tesla_proxy_retry_seconds=tesla_proxy_retry_seconds,
             nominal_voltage=nominal_voltage,

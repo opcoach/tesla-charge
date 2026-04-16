@@ -115,7 +115,12 @@ class TeslaController:
         )
         self._usage_stats = self._load_usage_stats()
 
-    def read_status(self, force_refresh: bool = False) -> TeslaSnapshot:
+    def read_status(
+        self,
+        force_refresh: bool = False,
+        *,
+        include_vehicle_data: bool = True,
+    ) -> TeslaSnapshot:
         try:
             with self._lock:
                 if not force_refresh and self._has_recent_snapshot():
@@ -124,7 +129,11 @@ class TeslaController:
                 vehicle = self._ensure_vehicle()
                 summary = self._get_vehicle_summary(vehicle["vin"])
                 vehicle_data = None
-                if summary.get("state") == "online" and self._should_refresh_vehicle_data(force_refresh):
+                if (
+                    include_vehicle_data
+                    and summary.get("state") == "online"
+                    and self._should_refresh_vehicle_data(force_refresh)
+                ):
                     vehicle_data = self._get_vehicle_data(vehicle["vin"])
                     self._last_detail_snapshot_at = datetime.now(timezone.utc)
 
@@ -162,10 +171,6 @@ class TeslaController:
                     raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
 
                 merged = self._merge_vehicle(vehicle, summary, None)
-                if self._should_refresh_vehicle_data(force_refresh=False):
-                    vehicle_data = self._get_vehicle_data(vehicle["vin"])
-                    self._last_detail_snapshot_at = datetime.now(timezone.utc)
-                    merged = self._merge_vehicle(vehicle, summary, vehicle_data)
                 snapshot_before = self._snapshot_from_vehicle(merged)
                 if not snapshot_before.plugged_in:
                     raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
@@ -230,10 +235,6 @@ class TeslaController:
                     raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
 
                 merged = self._merge_vehicle(vehicle, summary, None)
-                if self._should_refresh_vehicle_data(force_refresh=False):
-                    vehicle_data = self._get_vehicle_data(vehicle["vin"])
-                    self._last_detail_snapshot_at = datetime.now(timezone.utc)
-                    merged = self._merge_vehicle(vehicle, summary, vehicle_data)
                 snapshot_before = self._snapshot_from_vehicle(merged)
                 if not snapshot_before.plugged_in:
                     raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
@@ -281,10 +282,6 @@ class TeslaController:
                     raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
 
                 merged = self._merge_vehicle(vehicle, summary, None)
-                if self._should_refresh_vehicle_data(force_refresh=False):
-                    vehicle_data = self._get_vehicle_data(vehicle["vin"])
-                    self._last_detail_snapshot_at = datetime.now(timezone.utc)
-                    merged = self._merge_vehicle(vehicle, summary, vehicle_data)
                 snapshot_before = self._snapshot_from_vehicle(merged)
                 if not snapshot_before.plugged_in:
                     raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
