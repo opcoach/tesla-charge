@@ -1594,7 +1594,7 @@ def create_app(
     @app.post("/actions/refresh/tesla")
     def refresh_tesla_now() -> Any:
         try:
-            snapshot = tesla_controller.read_status(force_refresh=True)
+            snapshot = tesla_controller.read_vehicle_data_once()
         except Exception as exc:
             return jsonify({"error": str(exc)}), 502
         return jsonify(

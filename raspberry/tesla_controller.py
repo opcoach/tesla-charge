@@ -150,6 +150,28 @@ class TeslaController:
             self.record_error(exc)
             raise
 
+    def read_vehicle_data_once(self) -> TeslaSnapshot:
+        try:
+            with self._lock:
+                vehicle = self._ensure_vehicle()
+                vehicle_data = self._get_vehicle_data(vehicle["vin"])
+                self._last_detail_snapshot_at = datetime.now(timezone.utc)
+                summary = {
+                    "state": vehicle_data.get("state", vehicle.get("state", "unknown")),
+                }
+                merged = self._merge_vehicle(vehicle, summary, vehicle_data)
+                snapshot = self._snapshot_from_vehicle(merged)
+                self._vehicle = merged
+                self._last_snapshot = snapshot
+                self._last_snapshot_at = datetime.now(timezone.utc)
+                self._last_error = None
+
+            LOGGER.debug("Tesla vehicle_data snapshot: %s", snapshot)
+            return snapshot
+        except Exception as exc:
+            self.record_error(exc)
+            raise
+
     def set_status_refresh_seconds(self, seconds: int) -> None:
         with self._lock:
             self._status_refresh_seconds = max(1, int(seconds))
