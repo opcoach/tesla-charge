@@ -38,10 +38,15 @@ class LoopStatus:
     running: bool
     automation_enabled: bool
     poll_interval_seconds: int
+    tesla_command_delay_seconds: int
     current_interval_seconds: int
     schedule_mode: str
     desired_amps: int | None
     applied_amps: int | None
+    pending_command_baseline_amps: int | None
+    pending_command_target_amps: int | None
+    pending_command_started_at: str | None
+    pending_command_send_at: str | None
     last_reason: str | None
     last_run_at: str | None
     last_success_at: str | None
@@ -106,10 +111,15 @@ class ControlLoop:
             running=False,
             automation_enabled=True,
             poll_interval_seconds=self._active_poll_interval_seconds,
+            tesla_command_delay_seconds=config.tesla_status_interval_seconds,
             current_interval_seconds=self._active_poll_interval_seconds,
             schedule_mode="active_day",
             desired_amps=None,
             applied_amps=None,
+            pending_command_baseline_amps=None,
+            pending_command_target_amps=None,
+            pending_command_started_at=None,
+            pending_command_send_at=None,
             last_reason=None,
             last_run_at=None,
             last_success_at=None,
@@ -118,6 +128,10 @@ class ControlLoop:
         self._history: deque[TimelineSample] = deque()
         self._start_candidate_since: datetime | None = None
         self._stop_candidate_since: datetime | None = None
+        self._pending_command_started_at: datetime | None = None
+        self._pending_command_send_at: datetime | None = None
+        self._pending_command_baseline_amps: int | None = None
+        self._pending_command_target_amps: int | None = None
         self._smoothed_net_watts: float | None = None
 
     def start(self) -> None:
@@ -175,6 +189,7 @@ class ControlLoop:
                 tesla_seconds = max(1, int(tesla_status_interval_seconds))
                 self.tesla_controller.set_status_refresh_seconds(tesla_seconds)
                 self.tesla_controller.set_detail_refresh_seconds(max(900, tesla_seconds * 4))
+                self._status.tesla_command_delay_seconds = tesla_seconds
             current_poll = self._active_poll_interval_seconds
             current_tesla = self.tesla_controller.get_status_payload()["status_refresh_seconds"]
         return {
@@ -189,6 +204,7 @@ class ControlLoop:
             if changed:
                 self._start_candidate_since = None
                 self._stop_candidate_since = None
+                self._clear_pending_command_locked()
             automation_enabled = self._status.automation_enabled
         return {
             "automation_enabled": automation_enabled,
@@ -218,6 +234,7 @@ class ControlLoop:
                 self._status.last_run_at = started_at.isoformat()
                 self._status.last_success_at = started_at.isoformat()
                 self._status.last_error = None
+                self._sync_pending_command_status_locked()
             self._record_history_sample(
                 recorded_at=started_at,
                 schedule_mode="manual_refresh",
@@ -260,6 +277,7 @@ class ControlLoop:
                         self._status.last_run_at = started_at.isoformat()
                         self._status.last_reason = "idle_night"
                         self._status.last_error = None
+                        self._sync_pending_command_status_locked()
                     LOGGER.debug("Boucle en veille horaire")
                     self._stop_event.wait(wait_seconds)
                     continue
@@ -286,6 +304,7 @@ class ControlLoop:
                                 self._status.last_run_at = started_at.isoformat()
                                 self._status.last_success_at = started_at.isoformat()
                                 self._status.last_error = None
+                                self._sync_pending_command_status_locked()
                             self._stop_event.wait(wait_seconds)
                             continue
                         if not tesla_snapshot.plugged_in:
@@ -309,6 +328,7 @@ class ControlLoop:
                                 self._status.last_run_at = started_at.isoformat()
                                 self._status.last_success_at = started_at.isoformat()
                                 self._status.last_error = None
+                                self._sync_pending_command_status_locked()
                             LOGGER.info("Automatisation désactivée: véhicule débranché")
                             self._stop_event.wait(wait_seconds)
                             continue
@@ -340,6 +360,7 @@ class ControlLoop:
                         self._status.last_run_at = started_at.isoformat()
                         self._status.last_success_at = started_at.isoformat()
                         self._status.last_error = None
+                        self._sync_pending_command_status_locked()
 
                     LOGGER.info(
                         "Contrôle: surplus=%s W cible=%s A résultat=%s",
@@ -356,6 +377,7 @@ class ControlLoop:
                     self._status.last_run_at = started_at.isoformat()
                     self._status.last_error = error_message
                     self._status.last_reason = "error"
+                    self._sync_pending_command_status_locked()
                 LOGGER.exception("Erreur dans la boucle de contrôle")
             finally:
                 self._record_history_sample(
@@ -378,6 +400,8 @@ class ControlLoop:
         if not tesla_snapshot.plugged_in:
             self._start_candidate_since = None
             self._stop_candidate_since = None
+            with self._lock:
+                self._clear_pending_command_locked()
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "vehicle_not_plugged",
@@ -388,6 +412,8 @@ class ControlLoop:
         if tesla_snapshot.vehicle_state != "online":
             self._start_candidate_since = None
             self._stop_candidate_since = None
+            with self._lock:
+                self._clear_pending_command_locked()
             return {
                 "applied_amps": tesla_snapshot.charging_amps,
                 "reason": "vehicle_not_online",
@@ -397,6 +423,14 @@ class ControlLoop:
 
         now = datetime.now(timezone.utc)
         is_charging = self._is_charging(tesla_snapshot)
+        pending_decision, desired_amps = self._prepare_pending_command(
+            desired_amps,
+            tesla_snapshot,
+            is_charging,
+            now,
+        )
+        if pending_decision is not None:
+            return pending_decision
 
         if is_charging:
             self._start_candidate_since = None
@@ -416,6 +450,8 @@ class ControlLoop:
                     }
                 self._stop_candidate_since = None
                 try:
+                    with self._lock:
+                        self._clear_pending_command_locked()
                     result = self.tesla_controller.stop_charging(source="control_loop")
                 except TeslaProxyUnavailableError:
                     return {
@@ -441,6 +477,8 @@ class ControlLoop:
                 }
 
             try:
+                with self._lock:
+                    self._clear_pending_command_locked()
                 result = self.tesla_controller.set_charging_amps(
                     desired_amps,
                     source="control_loop",
@@ -485,6 +523,8 @@ class ControlLoop:
 
         self._start_candidate_since = None
         try:
+            with self._lock:
+                self._clear_pending_command_locked()
             start_result = self.tesla_controller.start_charging(source="control_loop")
             desired_after_start = self.config.charge_start_amps
             set_result = start_result
@@ -509,6 +549,85 @@ class ControlLoop:
             "command": command_label,
             "command_result": set_result.get("reason", "started"),
         }
+
+    def _prepare_pending_command(
+        self,
+        desired_amps: int,
+        tesla_snapshot: TeslaSnapshot,
+        is_charging: bool,
+        now: datetime,
+    ) -> tuple[dict[str, Any] | None, int]:
+        current_amps = tesla_snapshot.charging_amps or 0
+        baseline_amps = current_amps if is_charging else 0
+        if desired_amps == baseline_amps:
+            with self._lock:
+                self._clear_pending_command_locked()
+            return {
+                "applied_amps": current_amps,
+                "reason": "unchanged",
+                "command": None,
+                "command_result": None,
+            }, desired_amps
+
+        with self._lock:
+            if self._pending_command_started_at is None:
+                delay_seconds = self._status.tesla_command_delay_seconds
+                self._pending_command_started_at = now
+                self._pending_command_send_at = now + timedelta(seconds=delay_seconds)
+                self._pending_command_baseline_amps = baseline_amps
+            self._pending_command_target_amps = desired_amps
+            send_at = self._pending_command_send_at
+            target_amps = self._pending_command_target_amps
+            pending_baseline_amps = self._pending_command_baseline_amps
+
+            if target_amps == pending_baseline_amps:
+                self._clear_pending_command_locked()
+                return {
+                    "applied_amps": current_amps,
+                    "reason": "pending_cancelled",
+                    "command": None,
+                    "command_result": None,
+                }, desired_amps
+
+            self._sync_pending_command_status_locked()
+
+        if send_at is not None and now < send_at:
+            return {
+                "applied_amps": current_amps,
+                "reason": "command_pending",
+                "command": None,
+                "command_result": None,
+            }, desired_amps
+
+        if target_amps is None:
+            return {
+                "applied_amps": current_amps,
+                "reason": "unchanged",
+                "command": None,
+                "command_result": None,
+            }, desired_amps
+        return None, target_amps
+
+    def _clear_pending_command_locked(self) -> None:
+        self._pending_command_started_at = None
+        self._pending_command_send_at = None
+        self._pending_command_baseline_amps = None
+        self._pending_command_target_amps = None
+        self._sync_pending_command_status_locked()
+
+    def _sync_pending_command_status_locked(self) -> None:
+        self._status.pending_command_baseline_amps = self._pending_command_baseline_amps
+        self._status.pending_command_target_amps = self._pending_command_target_amps
+        self._status.pending_command_started_at = (
+            self._pending_command_started_at.isoformat()
+            if self._pending_command_started_at
+            else None
+        )
+        self._status.pending_command_send_at = (
+            self._pending_command_send_at.isoformat()
+            if self._pending_command_send_at
+            else None
+        )
 
     @staticmethod
     def _is_charging(tesla_snapshot: TeslaSnapshot) -> bool:

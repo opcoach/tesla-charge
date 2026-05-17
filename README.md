@@ -68,7 +68,7 @@ Le service :
 - affiche une page web locale de résumé avec un historique roulant, trois graphes séparés, des indicateurs d’âge des mesures, un compteur de prochaine mise à jour et une fenêtre de courbe sélectionnable côté navigateur.
 
 La boucle solaire tourne toutes les `5` secondes par défaut.
-La lecture Tesla est mise en cache `30` secondes par défaut pour éviter de solliciter inutilement le véhicule.
+La lecture des données Tesla est uniquement manuelle. La valeur `TESLA_STATUS_INTERVAL_SEC` sert de délai de validation avant d'envoyer une commande Tesla.
 Si le proxy local de commandes n’est pas disponible, un nouvel essai n’est tenté qu’après `60` secondes par défaut.
 La boucle passe en veille hors plage de jour, avec un réveil plus rare toutes les `900` secondes par défaut.
 
@@ -88,7 +88,7 @@ La boucle passe en veille hors plage de jour, avec un réveil plus rare toutes l
 - `APP_TIMEZONE` : défaut `Europe/Paris`
 - `CONTROL_INTERVAL_SEC` : défaut `5`
 - `CONTROL_IDLE_INTERVAL_SEC` : défaut `900`
-- `TESLA_STATUS_INTERVAL_SEC` : défaut `900`, conservé pour l'affichage de la cadence Tesla
+- `TESLA_STATUS_INTERVAL_SEC` : défaut `900`, délai de validation avant commande Tesla
 - `TESLA_IDLE_STATUS_INTERVAL_SEC` : défaut `3600`, conservé pour compatibilité de configuration
 - `TESLA_DETAIL_INTERVAL_SEC` : défaut `3600`, conservé pour compatibilité de configuration
 - `TESLA_PROXY_RETRY_SEC` : défaut `60`
@@ -263,7 +263,7 @@ sudo systemctl status tesla-command-proxy --no-pager
 Le tableau de bord affiche désormais :
 
 - le temps restant avant la prochaine régulation ;
-- la cadence Tesla configurée, sans lecture automatique des données Tesla ;
+- le délai Tesla configuré, utilisé comme temporisation avant d'envoyer une commande ;
 - deux indicateurs d'usage Tesla, séparant les requêtes de données et les commandes avec coût estimé ;
 - ces compteurs sont persistés localement dans `tesla-usage.json` pour conserver le mois en cours après un redémarrage ;
 - les données Tesla ne sont relues que par le bouton manuel placé dans la carte `Batterie Tesla` ;

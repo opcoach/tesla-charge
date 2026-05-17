@@ -508,9 +508,9 @@ DASHBOARD_HTML = """
       </div>
       <div class="pill">
         <span>Tesla</span>
-        <select id="tesla-interval-select" class="cadence-select is-default" data-current="{{ tesla_refresh_seconds }}" data-default="{{ tesla_refresh_seconds }}" aria-label="Changer la cadence de lecture Tesla"></select>
+        <select id="tesla-interval-select" class="cadence-select is-default" data-current="{{ tesla_refresh_seconds }}" data-default="{{ tesla_refresh_seconds }}" aria-label="Changer le délai de validation des commandes Tesla"></select>
         <a class="pill-link" href="https://developer.tesla.com/fr_FR/dashboard/usage" target="_blank" rel="noreferrer" title="Ouvrir la page Tesla Facturation et utilisation">€</a>
-        <span class="pill-hint">lecture manuelle</span>
+        <span class="pill-hint" id="tesla-command-countdown">aucune commande</span>
       </div>
     </div>
 
@@ -1249,8 +1249,19 @@ DASHBOARD_HTML = """
       const loopTarget = loopReference && loopInterval
         ? isoToMs(loopReference) + (loopInterval * 1000)
         : null;
+      const commandTarget = isoToMs(loop.pending_command_send_at);
+      const pendingAmps = loop.pending_command_target_amps;
 
       setText("loop-countdown", formatCountdown(loopTarget, nowMs), loopTarget !== null && loopTarget < nowMs ? "state-warn" : "state-ok");
+      if (commandTarget !== null && pendingAmps !== null && pendingAmps !== undefined) {
+        setText(
+          "tesla-command-countdown",
+          `${fmtAmps(pendingAmps)} ${formatCountdown(commandTarget, nowMs)}`,
+          commandTarget < nowMs ? "state-warn" : "state-ok",
+        );
+      } else {
+        setText("tesla-command-countdown", "aucune commande", "state-warn");
+      }
 
       updateRefreshOrb();
     }
