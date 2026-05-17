@@ -187,15 +187,7 @@ class TeslaController:
         clamped_amps = max(self.config.min_amps, min(self.config.max_amps, int(amps)))
         try:
             with self._lock:
-                vehicle = self._ensure_vehicle()
-                summary = self._get_vehicle_summary(vehicle["vin"])
-                if summary.get("state") != "online":
-                    raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
-
-                merged = self._merge_vehicle(vehicle, summary, None)
-                snapshot_before = self._snapshot_from_vehicle(merged)
-                if not snapshot_before.plugged_in:
-                    raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
+                vehicle, snapshot_before = self._require_command_context()
 
                 current_amps = snapshot_before.charging_amps
                 if current_amps == clamped_amps or self._last_commanded_amps == clamped_amps:
@@ -222,6 +214,7 @@ class TeslaController:
 
                 self._last_commanded_amps = clamped_amps
                 self._last_commanded_at = datetime.now(timezone.utc)
+                merged = dict(vehicle)
                 merged.setdefault("charge_state", {})["charge_current_request"] = clamped_amps
                 snapshot_after = self._snapshot_from_vehicle(merged)
                 self._vehicle = merged
@@ -251,15 +244,7 @@ class TeslaController:
     def start_charging(self, source: str = "manual") -> dict[str, Any]:
         try:
             with self._lock:
-                vehicle = self._ensure_vehicle()
-                summary = self._get_vehicle_summary(vehicle["vin"])
-                if summary.get("state") != "online":
-                    raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
-
-                merged = self._merge_vehicle(vehicle, summary, None)
-                snapshot_before = self._snapshot_from_vehicle(merged)
-                if not snapshot_before.plugged_in:
-                    raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
+                vehicle, snapshot_before = self._require_command_context()
 
                 if snapshot_before.charging_state == "Charging":
                     LOGGER.info("Commande %s ignorée: charge déjà active", source)
@@ -281,6 +266,13 @@ class TeslaController:
 
                 self._last_commanded_amps = snapshot_before.charging_amps or self.config.min_amps
                 self._last_commanded_at = datetime.now(timezone.utc)
+                merged = dict(vehicle)
+                charge_state = merged.setdefault("charge_state", {})
+                charge_state["charging_state"] = "Charging"
+                charge_state.setdefault("charge_current_request", self._last_commanded_amps)
+                self._vehicle = merged
+                self._last_snapshot = self._snapshot_from_vehicle(merged)
+                self._last_snapshot_at = datetime.now(timezone.utc)
                 self._last_error = None
 
             LOGGER.info("Commande %s envoyée: démarrage de la charge", source)
@@ -298,15 +290,7 @@ class TeslaController:
     def stop_charging(self, source: str = "manual") -> dict[str, Any]:
         try:
             with self._lock:
-                vehicle = self._ensure_vehicle()
-                summary = self._get_vehicle_summary(vehicle["vin"])
-                if summary.get("state") != "online":
-                    raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
-
-                merged = self._merge_vehicle(vehicle, summary, None)
-                snapshot_before = self._snapshot_from_vehicle(merged)
-                if not snapshot_before.plugged_in:
-                    raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
+                vehicle, snapshot_before = self._require_command_context()
 
                 if snapshot_before.charging_state != "Charging":
                     LOGGER.info("Commande %s ignorée: charge déjà arrêtée", source)
@@ -328,6 +312,13 @@ class TeslaController:
 
                 self._last_commanded_amps = 0
                 self._last_commanded_at = datetime.now(timezone.utc)
+                merged = dict(vehicle)
+                charge_state = merged.setdefault("charge_state", {})
+                charge_state["charging_state"] = "Stopped"
+                charge_state["charge_current_request"] = 0
+                self._vehicle = merged
+                self._last_snapshot = self._snapshot_from_vehicle(merged)
+                self._last_snapshot_at = datetime.now(timezone.utc)
                 self._last_error = None
 
             LOGGER.info("Commande %s envoyée: arrêt de la charge", source)
@@ -368,6 +359,15 @@ class TeslaController:
 
     def close(self) -> None:
         return
+
+    def _require_command_context(self) -> tuple[dict[str, Any], TeslaSnapshot]:
+        if self._vehicle is None or self._last_snapshot is None:
+            raise RuntimeError("Lecture Tesla manuelle requise avant commande")
+        if self._last_snapshot.vehicle_state != "online":
+            raise RuntimeError("La Tesla n'est pas en ligne, commande ignorée")
+        if not self._last_snapshot.plugged_in:
+            raise RuntimeError("La Tesla n'est pas branchée, commande ignorée")
+        return self._vehicle, self._last_snapshot
 
     def record_error(self, exc: Exception) -> None:
         message = str(exc)
