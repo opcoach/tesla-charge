@@ -513,8 +513,8 @@ DASHBOARD_HTML = """
     <div class="timing">
       <div class="pill">
         <span>Auto</span>
-        <button id="automation-toggle" class="automation-toggle" type="button" aria-pressed="true" title="Basculer entre régulation automatique et reprise manuelle">ON</button>
-        <span class="pill-hint" id="automation-hint">régulation automatique</span>
+        <button id="automation-toggle" class="automation-toggle is-off" type="button" aria-pressed="false" title="Basculer entre régulation automatique et reprise manuelle">OFF</button>
+        <span class="pill-hint state-warn" id="automation-hint">reprise manuelle</span>
       </div>
     </div>
 

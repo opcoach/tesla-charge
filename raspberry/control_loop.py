@@ -109,7 +109,7 @@ class ControlLoop:
         self._idle_poll_interval_seconds = config.idle_poll_interval_seconds
         self._status = LoopStatus(
             running=False,
-            automation_enabled=True,
+            automation_enabled=False,
             poll_interval_seconds=self._active_poll_interval_seconds,
             tesla_command_delay_seconds=config.tesla_status_interval_seconds,
             current_interval_seconds=self._active_poll_interval_seconds,
