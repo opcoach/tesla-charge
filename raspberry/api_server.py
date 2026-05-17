@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, render_template_string, request
@@ -54,7 +55,8 @@ DASHBOARD_HTML = """
     .title-lockup {
       position: relative;
       display: inline-flex;
-      align-items: flex-start;
+      align-items: center;
+      gap: 12px;
     }
     .refresh-orb {
       position: absolute;
@@ -89,6 +91,13 @@ DASHBOARD_HTML = """
       font-size: clamp(2rem, 6vw, 3.1rem);
       line-height: 1;
       letter-spacing: -0.04em;
+    }
+    .title-car {
+      display: block;
+      width: clamp(84px, 18vw, 150px);
+      max-height: 72px;
+      object-fit: contain;
+      margin-top: 4px;
     }
     .subhead {
       color: var(--muted);
@@ -414,6 +423,13 @@ DASHBOARD_HTML = """
       .timing {
         gap: 8px;
       }
+      .title-lockup {
+        gap: 8px;
+      }
+      .title-car {
+        width: 82px;
+        max-height: 52px;
+      }
       .timing .pill {
         width: 100%;
         min-width: 0;
@@ -472,6 +488,7 @@ DASHBOARD_HTML = """
       <div class="title-lockup">
         <button class="refresh-orb" id="refresh-orb" type="button" title="Rafraîchir le tableau de bord maintenant" aria-label="Rafraîchir le tableau de bord maintenant"></button>
         <h1>Tesla Charge</h1>
+        <img class="title-car" src="/static/tesla-charge-car.png" alt="">
       </div>
     </div>
     <div class="subhead">
@@ -1496,7 +1513,8 @@ def create_app(
     tesla_controller: TeslaController,
     control_loop: ControlLoop,
 ) -> Flask:
-    app = Flask(__name__)
+    static_folder = Path(__file__).resolve().parent / "static"
+    app = Flask(__name__, static_folder=str(static_folder), static_url_path="/static")
 
     @app.get("/")
     def dashboard() -> str:
