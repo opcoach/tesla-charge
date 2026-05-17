@@ -1265,14 +1265,25 @@ DASHBOARD_HTML = """
       if (!status) return;
 
       const loop = status.loop || {};
+      const tesla = status.tesla || {};
+      const snapshot = tesla.snapshot || {};
       const nowMs = Date.now();
       const commandTarget = isoToMs(loop.pending_command_send_at);
       const pendingAmps = loop.pending_command_target_amps;
+      const effectiveCurrentAmps = snapshot.charging_amps ?? tesla.last_commanded_amps ?? loop.applied_amps;
 
       if (commandTarget !== null && pendingAmps !== null && pendingAmps !== undefined) {
+        if (effectiveCurrentAmps !== null && effectiveCurrentAmps !== undefined && pendingAmps === effectiveCurrentAmps) {
+          setText("tesla-command-countdown", "aucune commande", "state-warn");
+          updateRefreshOrb();
+          return;
+        }
+        const countdown = commandTarget < nowMs
+          ? "en attente d'envoi"
+          : formatCountdown(commandTarget, nowMs);
         setText(
           "tesla-command-countdown",
-          `${fmtAmps(pendingAmps)} ${formatCountdown(commandTarget, nowMs)}`,
+          `${fmtAmps(pendingAmps)} ${countdown}`,
           commandTarget < nowMs ? "state-warn" : "state-ok",
         );
       } else {

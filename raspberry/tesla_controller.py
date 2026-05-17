@@ -200,7 +200,7 @@ class TeslaController:
                     }
 
                 response_body = self._post_proxy_command(
-                    merged["vin"],
+                    vehicle["vin"],
                     "set_charging_amps",
                     {"charging_amps": clamped_amps},
                 )
@@ -255,7 +255,7 @@ class TeslaController:
                         "reason": "already_charging",
                     }
 
-                response_body = self._post_proxy_command(merged["vin"], "charge_start", {})
+                response_body = self._post_proxy_command(vehicle["vin"], "charge_start", {})
                 response_data = response_body.get("response", {})
                 result = response_data.get("result", True)
                 reason = response_data.get("reason")
@@ -301,7 +301,7 @@ class TeslaController:
                         "reason": "already_stopped",
                     }
 
-                response_body = self._post_proxy_command(merged["vin"], "charge_stop", {})
+                response_body = self._post_proxy_command(vehicle["vin"], "charge_stop", {})
                 response_data = response_body.get("response", {})
                 result = response_data.get("result", True)
                 reason = response_data.get("reason")
