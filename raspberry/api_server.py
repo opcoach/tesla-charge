@@ -503,8 +503,6 @@ DASHBOARD_HTML = """
       <div class="pill">
         <span>Solaire</span>
         <select id="loop-interval-select" class="cadence-select is-default" data-current="{{ loop_interval_seconds }}" data-default="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
-        <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture et une régulation maintenant">↻</button>
-        <span class="pill-hint"><span id="loop-countdown">--</span></span>
       </div>
       <div class="pill">
         <span>Tesla</span>
@@ -520,6 +518,7 @@ DASHBOARD_HTML = """
           <div class="card-title">
             <div class="label">Production solaire</div>
           </div>
+          <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture solaire maintenant" aria-label="Forcer une lecture solaire maintenant">↻</button>
           <span class="info-icon" title="Puissance instantanée produite par l'installation photovoltaïque.">i</span>
         </div>
         <div class="value" id="production">--</div>
@@ -1241,18 +1240,11 @@ DASHBOARD_HTML = """
       const status = dashboardState.status;
       if (!status) return;
 
-      const solar = status.solar?.snapshot || {};
       const loop = status.loop || {};
       const nowMs = Date.now();
-      const loopInterval = loop.current_interval_seconds || loop.poll_interval_seconds || refreshMs / 1000;
-      const loopReference = loop.last_success_at || loop.last_run_at;
-      const loopTarget = loopReference && loopInterval
-        ? isoToMs(loopReference) + (loopInterval * 1000)
-        : null;
       const commandTarget = isoToMs(loop.pending_command_send_at);
       const pendingAmps = loop.pending_command_target_amps;
 
-      setText("loop-countdown", formatCountdown(loopTarget, nowMs), loopTarget !== null && loopTarget < nowMs ? "state-warn" : "state-ok");
       if (commandTarget !== null && pendingAmps !== null && pendingAmps !== undefined) {
         setText(
           "tesla-command-countdown",
