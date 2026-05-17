@@ -526,7 +526,6 @@ DASHBOARD_HTML = """
           </div>
           <div class="inline-controls">
             <select id="loop-interval-select" class="cadence-select is-default" data-current="{{ loop_interval_seconds }}" data-default="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
-            <span class="pill-hint" id="loop-countdown">--</span>
             <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture solaire maintenant" aria-label="Forcer une lecture solaire maintenant">↻</button>
           </div>
           <span class="info-icon" title="Puissance instantanée produite par l'installation photovoltaïque.">i</span>
@@ -1267,24 +1266,8 @@ DASHBOARD_HTML = """
 
       const loop = status.loop || {};
       const nowMs = Date.now();
-      const loopInterval = loop.current_interval_seconds || loop.poll_interval_seconds || (refreshMs / 1000);
-      const loopReference = loop.last_success_at || loop.last_run_at;
-      const loopReferenceMs = isoToMs(loopReference);
-      const loopTarget = loopReferenceMs !== null && loopInterval
-        ? loopReferenceMs + (loopInterval * 1000)
-        : null;
       const commandTarget = isoToMs(loop.pending_command_send_at);
       const pendingAmps = loop.pending_command_target_amps;
-
-      if (loopTarget !== null) {
-        setText(
-          "loop-countdown",
-          formatCountdown(loopTarget, nowMs),
-          loopTarget < nowMs ? "state-warn" : "state-ok",
-        );
-      } else {
-        setText("loop-countdown", "--", "state-warn");
-      }
 
       if (commandTarget !== null && pendingAmps !== null && pendingAmps !== undefined) {
         setText(
