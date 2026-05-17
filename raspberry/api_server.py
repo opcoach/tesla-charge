@@ -185,6 +185,13 @@ DASHBOARD_HTML = """
       border-color: var(--accent);
       color: var(--accent);
     }
+    .inline-controls {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
     .automation-toggle {
       border: 1px solid var(--line);
       background: rgba(255, 253, 248, 0.95);
@@ -240,6 +247,15 @@ DASHBOARD_HTML = """
       border-radius: 18px;
       padding: 14px;
       box-shadow: 0 12px 30px rgba(35, 32, 26, 0.06);
+    }
+    .card.is-disabled {
+      opacity: 0.45;
+      filter: grayscale(0.7);
+    }
+    .card.is-disabled .cadence-select,
+    .card.is-disabled .pill-action,
+    .card.is-disabled .pill-link {
+      pointer-events: none;
     }
     .card-top {
       display: flex;
@@ -500,16 +516,6 @@ DASHBOARD_HTML = """
         <button id="automation-toggle" class="automation-toggle" type="button" aria-pressed="true" title="Basculer entre régulation automatique et reprise manuelle">ON</button>
         <span class="pill-hint" id="automation-hint">régulation automatique</span>
       </div>
-      <div class="pill">
-        <span>Solaire</span>
-        <select id="loop-interval-select" class="cadence-select is-default" data-current="{{ loop_interval_seconds }}" data-default="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
-      </div>
-      <div class="pill">
-        <span>Tesla</span>
-        <select id="tesla-interval-select" class="cadence-select is-default" data-current="{{ tesla_refresh_seconds }}" data-default="{{ tesla_refresh_seconds }}" aria-label="Changer le délai de validation des commandes Tesla"></select>
-        <a class="pill-link" href="https://developer.tesla.com/fr_FR/dashboard/usage" target="_blank" rel="noreferrer" title="Ouvrir la page Tesla Facturation et utilisation">€</a>
-        <span class="pill-hint" id="tesla-command-countdown">aucune commande</span>
-      </div>
     </div>
 
     <section class="summary-row">
@@ -518,7 +524,11 @@ DASHBOARD_HTML = """
           <div class="card-title">
             <div class="label">Production solaire</div>
           </div>
-          <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture solaire maintenant" aria-label="Forcer une lecture solaire maintenant">↻</button>
+          <div class="inline-controls">
+            <select id="loop-interval-select" class="cadence-select is-default" data-current="{{ loop_interval_seconds }}" data-default="{{ loop_interval_seconds }}" aria-label="Changer la cadence de régulation"></select>
+            <span class="pill-hint" id="loop-countdown">--</span>
+            <button class="pill-action" type="button" data-refresh-action="loop" title="Forcer une lecture solaire maintenant" aria-label="Forcer une lecture solaire maintenant">↻</button>
+          </div>
           <span class="info-icon" title="Puissance instantanée produite par l'installation photovoltaïque.">i</span>
         </div>
         <div class="value" id="production">--</div>
@@ -580,18 +590,25 @@ DASHBOARD_HTML = """
           <div class="card-title">
             <div class="label">Données Tesla</div>
           </div>
-          <span class="info-icon" title="Requêtes billables du mois en cours sur les endpoints de données Tesla. Estimation calculée à partir du tarif indicatif Tesla: 500 requêtes / 1 €.">i</span>
+          <div class="inline-controls">
+            <a class="pill-link" href="https://developer.tesla.com/fr_FR/dashboard/usage" target="_blank" rel="noreferrer" title="Ouvrir la page Tesla de facturation et d'utilisation">€</a>
+            <span class="info-icon" title="Requêtes billables du mois en cours sur les endpoints de données Tesla. Estimation calculée à partir du tarif indicatif Tesla: 500 requêtes / 1 €.">i</span>
+          </div>
         </div>
         <div class="value" id="data-requests">--</div>
         <div class="meta-line"><span>Coût estimé</span><strong id="data-cost">--</strong></div>
         <div class="meta-line"><span>Tarif indicatif</span><strong>500 req / 1 €</strong></div>
       </article>
-      <article class="card">
+      <article class="card" id="commands-card" aria-disabled="false">
         <div class="card-top">
           <div class="card-title">
             <div class="label">Commandes Tesla</div>
           </div>
-          <span class="info-icon" title="Requêtes billables du mois en cours sur les commandes signées Tesla. Estimation calculée à partir du tarif indicatif Tesla: 1000 requêtes / 1 €.">i</span>
+          <div class="inline-controls">
+            <select id="tesla-interval-select" class="cadence-select is-default" data-current="{{ tesla_refresh_seconds }}" data-default="{{ tesla_refresh_seconds }}" aria-label="Changer le délai de validation des commandes Tesla"></select>
+            <span class="pill-hint" id="tesla-command-countdown" title="Durée après laquelle l'ajustement de l'intensité de charge sera fait.">aucune commande</span>
+            <span class="info-icon" title="Requêtes billables du mois en cours sur les commandes signées Tesla. Estimation calculée à partir du tarif indicatif Tesla: 1000 requêtes / 1 €.">i</span>
+          </div>
         </div>
         <div class="value" id="command-requests">--</div>
         <div class="meta-line"><span>Coût estimé</span><strong id="command-cost">--</strong></div>
@@ -744,6 +761,7 @@ DASHBOARD_HTML = """
     const automationToggle = document.getElementById("automation-toggle");
     const automationHint = document.getElementById("automation-hint");
     const ampsChartCard = document.getElementById("amps-chart-card");
+    const commandsCard = document.getElementById("commands-card");
     const storedWindow = localStorage.getItem("tesla-charge-chart-window");
     if (storedWindow && ["900", "1800", "3600"].includes(storedWindow)) {
       chartWindowSelect.value = storedWindow;
@@ -889,6 +907,13 @@ DASHBOARD_HTML = """
       automationToggle.classList.toggle("is-off", !enabled);
       if (ampsChartCard) {
         ampsChartCard.style.display = enabled ? "" : "none";
+      }
+      if (commandsCard) {
+        commandsCard.classList.toggle("is-disabled", !enabled);
+        commandsCard.setAttribute("aria-disabled", enabled ? "false" : "true");
+      }
+      if (teslaIntervalSelect) {
+        teslaIntervalSelect.disabled = !enabled;
       }
       automationToggle.title = enabled
         ? "Régulation automatique active. Cliquer pour passer en reprise manuelle."
@@ -1186,7 +1211,7 @@ DASHBOARD_HTML = """
     }
 
     function currentTeslaIntervalSeconds(status) {
-      return status?.tesla?.status_refresh_seconds || teslaRefreshSeconds;
+      return status?.loop?.tesla_command_delay_seconds || status?.tesla?.status_refresh_seconds || teslaRefreshSeconds;
     }
 
     function currentLoopIntervalSeconds(status) {
@@ -1242,8 +1267,24 @@ DASHBOARD_HTML = """
 
       const loop = status.loop || {};
       const nowMs = Date.now();
+      const loopInterval = loop.current_interval_seconds || loop.poll_interval_seconds || (refreshMs / 1000);
+      const loopReference = loop.last_success_at || loop.last_run_at;
+      const loopReferenceMs = isoToMs(loopReference);
+      const loopTarget = loopReferenceMs !== null && loopInterval
+        ? loopReferenceMs + (loopInterval * 1000)
+        : null;
       const commandTarget = isoToMs(loop.pending_command_send_at);
       const pendingAmps = loop.pending_command_target_amps;
+
+      if (loopTarget !== null) {
+        setText(
+          "loop-countdown",
+          formatCountdown(loopTarget, nowMs),
+          loopTarget < nowMs ? "state-warn" : "state-ok",
+        );
+      } else {
+        setText("loop-countdown", "--", "state-warn");
+      }
 
       if (commandTarget !== null && pendingAmps !== null && pendingAmps !== undefined) {
         setText(
