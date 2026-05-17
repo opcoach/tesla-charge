@@ -156,6 +156,26 @@ DASHBOARD_HTML = """
       border-color: var(--accent);
       color: var(--accent);
     }
+    .pill-link {
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.95);
+      color: var(--ink);
+      border-radius: 999px;
+      min-width: 26px;
+      height: 26px;
+      padding: 0 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      line-height: 1;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .pill-link:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
     .automation-toggle {
       border: 1px solid var(--line);
       background: rgba(255, 253, 248, 0.95);
@@ -474,6 +494,7 @@ DASHBOARD_HTML = """
         <span>Tesla</span>
         <select id="tesla-interval-select" class="cadence-select is-default" data-current="{{ tesla_refresh_seconds }}" data-default="{{ tesla_refresh_seconds }}" aria-label="Changer la cadence de lecture Tesla"></select>
         <button class="pill-action" type="button" data-refresh-action="tesla" title="Forcer une lecture Tesla maintenant">↻</button>
+        <a class="pill-link" href="https://developer.tesla.com/fr_FR/dashboard/usage" target="_blank" rel="noreferrer" title="Ouvrir la page Tesla Facturation et utilisation">€</a>
         <span class="pill-hint" id="tesla-countdown-wrap"><span id="tesla-countdown">--</span></span>
       </div>
     </div>

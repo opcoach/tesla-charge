@@ -487,9 +487,8 @@ class TeslaController:
                 f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
             ) from exc
 
-        if response.status_code < 500:
-            self._record_usage("commands")
         if response.status_code == 401:
+            self._record_billable_response(response, "commands")
             access_token = self._refresh_access_token(force=True)
             try:
                 response = requests.post(
@@ -510,8 +509,7 @@ class TeslaController:
                     f"Proxy de commandes Tesla indisponible sur {self.config.tesla_proxy_url}"
                 ) from exc
 
-        if response.status_code < 500:
-            self._record_usage("commands")
+        self._record_billable_response(response, "commands")
         response.raise_for_status()
         self._proxy_unavailable_until = None
         payload = response.json()
@@ -549,9 +547,8 @@ class TeslaController:
             timeout=self.config.requests_timeout_seconds,
         )
 
-        if response.status_code < 500:
-            self._record_usage("data")
         if response.status_code == 401:
+            self._record_billable_response(response, "data")
             access_token = self._refresh_access_token(force=True)
             response = requests.request(
                 method,
@@ -560,8 +557,7 @@ class TeslaController:
                 timeout=self.config.requests_timeout_seconds,
             )
 
-        if response.status_code < 500:
-            self._record_usage("data")
+        self._record_billable_response(response, "data")
         response.raise_for_status()
         return response.json()
 
@@ -588,6 +584,10 @@ class TeslaController:
                 self._usage_stats.wake_requests += 1
             self._usage_stats.updated_at = now.isoformat()
             self._save_usage_stats_locked()
+
+    def _record_billable_response(self, response: requests.Response, category: str) -> None:
+        if response.status_code < 500:
+            self._record_usage(category)
 
     def _load_usage_stats(self) -> UsageStats:
         month_key = datetime.now(timezone.utc).strftime("%Y-%m")

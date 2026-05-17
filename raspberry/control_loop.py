@@ -200,14 +200,25 @@ class ControlLoop:
         with self._cycle_lock:
             started_at = self._now()
             solar_snapshot = self.solar_monitor.read_snapshot()
-            tesla_snapshot = self.tesla_controller.read_status(force_refresh=True)
-            desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
+            with self._lock:
+                automation_enabled = self._status.automation_enabled
+            if automation_enabled:
+                tesla_snapshot = self.tesla_controller.read_status(
+                    force_refresh=True,
+                    include_vehicle_data=False,
+                )
+                desired_amps = self._calculate_desired_amps(solar_snapshot, tesla_snapshot)
+                applied_amps = tesla_snapshot.charging_amps
+            else:
+                tesla_snapshot = None
+                desired_amps = None
+                applied_amps = None
             with self._lock:
                 self._status.running = True
                 self._status.current_interval_seconds = self._active_poll_interval_seconds
                 self._status.schedule_mode = "manual_refresh"
                 self._status.desired_amps = desired_amps
-                self._status.applied_amps = tesla_snapshot.charging_amps
+                self._status.applied_amps = applied_amps
                 self._status.last_reason = "manual_refresh"
                 self._status.last_run_at = started_at.isoformat()
                 self._status.last_success_at = started_at.isoformat()
@@ -219,7 +230,7 @@ class ControlLoop:
                 tesla_snapshot=tesla_snapshot,
                 desired_amps=desired_amps,
                 decision={
-                    "applied_amps": tesla_snapshot.charging_amps,
+                    "applied_amps": applied_amps,
                     "reason": "manual_refresh",
                     "command": None,
                     "command_result": None,

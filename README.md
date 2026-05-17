@@ -267,6 +267,8 @@ Le tableau de bord affiche désormais :
 - deux indicateurs d'usage Tesla, séparant les requêtes de données et les commandes avec coût estimé ;
 - ces compteurs sont persistés localement dans `tesla-usage.json` pour conserver le mois en cours après un redémarrage ;
 - en mode automatique, la Tesla est interrogée de façon beaucoup plus parcimonieuse hors charge, avec des lectures détaillées réservées aux rafraîchissements manuels ;
+- en mode `OFF`, l'app continue de lire le solaire mais ne lance plus de lecture Tesla automatique ;
+- la pastille Tesla contient un lien direct vers la page Tesla `Facturation et utilisation` ;
 - un graphe puissance ;
 - un graphe réseau séparé ;
 - un graphe Tesla avec zoom ;
